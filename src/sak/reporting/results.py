@@ -15,6 +15,8 @@ MODEL_LABELS = {
     "pca_mode_aware": "PCA / Mode-Aware",
     "dense_autoencoder_global": "Dense Autoencoder / Global",
     "dense_autoencoder_mode_aware": "Dense Autoencoder / Mode-Aware",
+    "tcn_autoencoder_global": "TCN Autoencoder / Global",
+    "tcn_autoencoder_mode_aware": "TCN Autoencoder / Mode-Aware",
 }
 
 

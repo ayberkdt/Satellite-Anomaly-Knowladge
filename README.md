@@ -137,7 +137,7 @@ The current research pipeline is:
 1. Generate deterministic synthetic satellite telemetry and injection metadata.
 2. Create chronological train, validation and test partitions.
 3. Fit preprocessing only on the training partition.
-4. Fit PCA and Dense Autoencoder reconstruction models.
+4. Fit PCA, Dense Autoencoder and optionally TCN Autoencoder models.
 5. Calibrate global and operational-mode-aware thresholds on validation data.
 6. Apply EWMA and persistence filtering, then build detected events.
 7. Calculate point, event, delay and false-alarm metrics.
@@ -175,6 +175,13 @@ An explicit seed or output directory can be supplied:
 python experiments/run_synthetic_models.py --seed 42 --output artifacts/synthetic_models
 ```
 
+Run only the temporal model or all current baselines:
+
+```powershell
+python experiments/run_synthetic_models.py --models tcn_autoencoder
+python experiments/run_synthetic_models.py --models pca dense_autoencoder tcn_autoencoder
+```
+
 ## How To Run Multi-Seed Experiment
 
 The multi-seed runner executes isolated sequential runs and aggregates metrics
@@ -182,6 +189,7 @@ by model variant:
 
 ```powershell
 python experiments/run_multiseed_synthetic.py --seeds 1 2 3 4 5
+python experiments/run_multiseed_synthetic.py --seeds 1 2 3 --models pca dense_autoencoder tcn_autoencoder
 ```
 
 Each seed is written under `artifacts/multiseed/seed_NNN/`.
@@ -206,7 +214,11 @@ artifacts/synthetic_models/
 |   `-- plots/
 |-- pca_mode_aware/
 |-- dense_autoencoder_global/
-`-- dense_autoencoder_mode_aware/
+|-- dense_autoencoder_mode_aware/
+|-- tcn_autoencoder_global/
+|   |-- xai/temporal_error_summary.json
+|   `-- plots/temporal_window_error_heatmap.png
+`-- tcn_autoencoder_mode_aware/
 ```
 
 Machine-facing and human-facing reports are also written to
@@ -220,10 +232,34 @@ threshold strategy, event and critical-window times, score, threshold, risk,
 ranked channel contributions, subsystem contribution mass, engineering
 interpretation, inspection guidance, uncertainty and reproducibility metadata.
 
-## Temporal Windowing Roadmap
+## SAK-v2.2 Temporal Autoencoder
 
-`sak.features.windowing.build_windows` prepares data for future temporal
-models:
+The Dense Autoencoder reconstructs each timestamp independently. The optional
+TCN Autoencoder reconstructs fixed-length windows and uses dilated temporal
+convolutions to represent local trend, drift and cross-time behavior.
+
+Windowing is always applied separately after the chronological train,
+validation and test split. Window-position reconstruction errors are mapped
+back to timestamps by averaging or taking the maximum over overlapping
+windows. The resulting timestamp score and channel errors then enter the same
+threshold, EWMA, persistence, event evaluation, attribution and report
+pipeline used by PCA and Dense AE.
+
+Temporal XAI retains the standard channel/subsystem explanation and adds:
+
+- `xai/temporal_error_summary.json`;
+- `plots/temporal_window_error_heatmap.png`;
+- timestamp-aligned channel errors for critical-window attribution.
+
+The TCN is opt-in so routine PCA/Dense AE runs retain their previous runtime:
+
+```powershell
+python experiments/run_synthetic_models.py --models tcn_autoencoder
+```
+
+## Temporal Windowing
+
+`sak.features.windowing.build_windows` prepares data for temporal models:
 
 ```python
 from sak.features import build_windows
@@ -260,3 +296,6 @@ Only after these layers are validated should graph topology, edge semantics and
 graph attribution be introduced. This keeps future GNN results comparable to
 trusted non-graph baselines instead of adding model complexity before the
 evaluation system is ready.
+
+The temporal experiment design is documented in
+[Experiment 002](docs/experiment-002-temporal-autoencoder.md).

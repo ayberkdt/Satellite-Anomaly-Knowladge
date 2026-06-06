@@ -408,20 +408,28 @@ def render_synthetic_dashboard(
     best_channel = max(model_rows, key=lambda row: float(row["channel_hit_at_3"]))
     best_event = max(model_rows, key=lambda row: float(row["event_f1"]))
     low_noise = min(model_rows, key=lambda row: float(row["false_alarms_per_day"]))
-    pca_variant = "pca_global" if "pca_global" in comparison else "pca"
-    ae_variant = (
+    score_variant = (
+        "pca_global"
+        if "pca_global" in comparison
+        else model_keys[0]
+    )
+    heatmap_variant = (
         "dense_autoencoder_global"
         if "dense_autoencoder_global" in comparison
-        else "dense_autoencoder"
+        else (
+            "tcn_autoencoder_global"
+            if "tcn_autoencoder_global" in comparison
+            else model_keys[0]
+        )
     )
-    pca_score = artifact_dir / pca_variant / "plots" / "score_timeline.png"
+    pca_score = artifact_dir / score_variant / "plots" / "score_timeline.png"
     ae_heatmap = (
-        artifact_dir / ae_variant / "plots" / "channel_error_heatmap.png"
+        artifact_dir / heatmap_variant / "plots" / "channel_error_heatmap.png"
     )
     if not pca_score.exists():
-        pca_score = artifact_dir / pca_variant / "score_timeline.png"
+        pca_score = artifact_dir / score_variant / "score_timeline.png"
     if not ae_heatmap.exists():
-        ae_heatmap = artifact_dir / ae_variant / "channel_error_heatmap.png"
+        ae_heatmap = artifact_dir / heatmap_variant / "channel_error_heatmap.png"
 
     html_text = f"""<!doctype html>
 <html lang="tr">

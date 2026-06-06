@@ -52,13 +52,13 @@ def build_run_manifest(
     models: list[str],
     repository_dir: Path,
 ) -> dict[str, Any]:
-    """Build the stable SAK-v2.1 run metadata payload."""
+    """Build the stable SAK-v2.2 run metadata payload."""
 
     created_at = datetime.now(timezone.utc)
     payload: dict[str, Any] = {
-        "run_id": f"sak-v2.1-{created_at:%Y%m%dT%H%M%SZ}-seed-{seed}",
+        "run_id": f"sak-v2.2-{created_at:%Y%m%dT%H%M%SZ}-seed-{seed}",
         "created_at": created_at.isoformat(),
-        "sak_version": "SAK-v2.1",
+        "sak_version": "SAK-v2.2",
         "seed": seed,
         "config_path": str(config_path),
         "dataset_name": "synthetic",
@@ -70,7 +70,7 @@ def build_run_manifest(
         "test_start": test_index[0].isoformat(),
         "test_end": test_index[-1].isoformat(),
         "models": models,
-        "notes": "Evaluation stabilization run",
+        "notes": "Window-based temporal autoencoder evaluation run",
     }
     git_hash = optional_git_hash(repository_dir)
     if git_hash is not None:

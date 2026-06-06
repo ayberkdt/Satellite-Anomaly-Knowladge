@@ -116,3 +116,35 @@ def plot_error_heatmap(
     figure.tight_layout()
     figure.savefig(output_path, dpi=150)
     plt.close(figure)
+
+
+def plot_temporal_window_error_heatmap(
+    window_channel_errors: np.ndarray,
+    channel_names: tuple[str, ...],
+    output_path: Path,
+    title: str,
+) -> None:
+    """Save mean reconstruction error per temporal window and channel."""
+
+    errors = np.asarray(window_channel_errors, dtype=float)
+    if errors.ndim != 3 or errors.shape[2] != len(channel_names):
+        raise ValueError(
+            "window_channel_errors must have shape [windows, time, channels]"
+        )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    window_channel_mean = errors.mean(axis=1)
+    figure, axis = plt.subplots(figsize=(16, 7))
+    image = axis.imshow(
+        np.log1p(window_channel_mean.T),
+        aspect="auto",
+        interpolation="nearest",
+        cmap="magma",
+    )
+    axis.set_yticks(np.arange(len(channel_names)))
+    axis.set_yticklabels(channel_names)
+    axis.set_xlabel("Window index")
+    axis.set_title(title)
+    figure.colorbar(image, ax=axis, label="log(1 + mean window error)")
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=150)
+    plt.close(figure)

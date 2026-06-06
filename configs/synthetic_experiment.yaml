@@ -27,6 +27,22 @@ autoencoder:
   weight_decay: 0.00001
   patience: 6
 
+temporal_autoencoder:
+  window_size: 60
+  stride: 1
+  label_mode: any
+  hidden_channels: 32
+  latent_channels: 16
+  kernel_size: 5
+  num_layers: 3
+  dropout: 0.0
+  epochs: 35
+  batch_size: 128
+  learning_rate: 0.001
+  weight_decay: 0.00001
+  patience: 6
+  aggregation: mean
+
 early_warning:
   ewma_alpha: 0.20
   threshold_quantile: 0.995

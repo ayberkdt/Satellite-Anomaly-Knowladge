@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import numpy as np
 import pandas as pd
@@ -33,8 +33,16 @@ from sak.experiments.diagnostics import (
     build_false_positive_rows,
 )
 from sak.experiments.manifest import build_run_manifest, write_run_manifest
+from sak.features import WindowedData, build_windows
+from sak.features.windowing import LabelMode
 from sak.models.autoencoders import DenseAutoencoderConfig, DenseAutoencoderModel
 from sak.models.baselines import PCAAnomalyModel
+from sak.models.temporal import (
+    TCNAutoencoderConfig,
+    TCNAutoencoderModel,
+    aggregate_window_errors_to_timestamps,
+)
+from sak.models.temporal.scoring import Aggregation
 from sak.preprocessing import RobustTelemetryPreprocessor, chronological_split
 from sak.reporting import (
     build_early_warning_report_payload,
@@ -42,7 +50,11 @@ from sak.reporting import (
     render_synthetic_dashboard,
 )
 from sak.synthetic import SyntheticConfig, generate_synthetic_telemetry
-from sak.visualization import plot_error_heatmap, plot_score_timeline
+from sak.visualization import (
+    plot_error_heatmap,
+    plot_score_timeline,
+    plot_temporal_window_error_heatmap,
+)
 from sak.xai import build_reconstruction_explanation, load_subsystem_mapping
 
 
@@ -70,6 +82,16 @@ class ThresholdEvaluation:
     event_result: dict[str, Any]
     threshold_metadata: dict[str, Any]
     threshold_sweep: list[dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class TemporalArtifacts:
+    """Window-level data retained for temporal XAI artefacts."""
+
+    source_indices: np.ndarray
+    window_scores: np.ndarray
+    window_channel_errors: np.ndarray
+    summary: dict[str, Any]
 
 
 def _risk_level(score: float, threshold: float) -> str:
@@ -475,7 +497,7 @@ def _write_reports(
             model_variant=model_variant,
             threshold_strategy=evaluation.strategy,
             source_event_id=source_ids.get(detected.event_id),
-            metadata={"dataset": "synthetic", "seed": seed, "version": "SAK-v2.1"},
+            metadata={"dataset": "synthetic", "seed": seed, "version": "SAK-v2.2"},
         )
         markdown = render_early_warning_report_payload(report_payload)
         for report_dir in (paths.reports, generated_variant_dir):
@@ -535,7 +557,7 @@ def _write_score_artifacts(
     predictions.to_csv(paths.root / "predictions.csv", index=False)
 
 
-def _model_metadata(model: ReconstructionModel) -> dict[str, Any]:
+def _model_metadata(model: Any) -> dict[str, Any]:
     if isinstance(model, PCAAnomalyModel):
         if model.explained_variance_ratio_ is None:
             raise RuntimeError("PCA metadata requested before fitting")
@@ -552,10 +574,23 @@ def _model_metadata(model: ReconstructionModel) -> dict[str, Any]:
             "epochs_trained": len(model.training_history_),
             "final_holdout_loss": model.training_history_[-1]["holdout_loss"],
         }
+    if isinstance(model, TCNAutoencoderModel):
+        if not model.training_history_:
+            raise RuntimeError("TCN autoencoder metadata requested before fitting")
+        return {
+            "epochs_trained": len(model.training_history_),
+            "final_holdout_loss": model.training_history_[-1]["holdout_loss"],
+            "window_size": model.config.window_size,
+            "stride": model.config.stride,
+            "hidden_channels": model.config.hidden_channels,
+            "latent_channels": model.config.latent_channels,
+            "kernel_size": model.config.kernel_size,
+            "num_layers": model.config.num_layers,
+        }
     return {}
 
 
-def _save_model(model: ReconstructionModel, paths: VariantArtifactPaths) -> None:
+def _save_model(model: Any, paths: VariantArtifactPaths) -> None:
     suffix = "npz" if isinstance(model, PCAAnomalyModel) else "pt"
     model.save(paths.root / f"model.{suffix}")
 
@@ -563,7 +598,7 @@ def _save_model(model: ReconstructionModel, paths: VariantArtifactPaths) -> None
 def _write_variant(
     *,
     model_name: str,
-    model: ReconstructionModel,
+    model: Any,
     evaluation: ThresholdEvaluation,
     test_scores: np.ndarray,
     channel_errors: np.ndarray,
@@ -576,6 +611,7 @@ def _write_variant(
     output_dir: Path,
     generated_report_root: Path,
     seed: int,
+    temporal_artifacts: TemporalArtifacts | None = None,
 ) -> tuple[str, dict[str, Any]]:
     model_variant = model_variant_name(model_name, evaluation.strategy)
     paths = create_variant_artifact_paths(output_dir, model_variant)
@@ -611,6 +647,11 @@ def _write_variant(
             for event_id, explanation in explanations.items()
         },
     )
+    if temporal_artifacts is not None:
+        write_json(
+            paths.xai / "temporal_error_summary.json",
+            temporal_artifacts.summary,
+        )
     _write_score_artifacts(
         paths=paths,
         evaluation=evaluation,
@@ -648,6 +689,13 @@ def _write_variant(
         output_path=paths.plots / "channel_error_heatmap.png",
         title=f"Channel reconstruction errors - {model_variant}",
     )
+    if temporal_artifacts is not None:
+        plot_temporal_window_error_heatmap(
+            window_channel_errors=temporal_artifacts.window_channel_errors,
+            channel_names=channel_names,
+            output_path=paths.plots / "temporal_window_error_heatmap.png",
+            title=f"Temporal window reconstruction errors - {model_variant}",
+        )
     _save_model(model, paths)
     result = {
         "model_name": model_name,
@@ -716,6 +764,176 @@ def _evaluate_model(
     return results
 
 
+def _build_partition_windows(
+    *,
+    values: np.ndarray,
+    frame: pd.DataFrame,
+    window_size: int,
+    stride: int,
+    label_mode: LabelMode,
+) -> WindowedData:
+    """Build windows inside one already separated chronological partition."""
+
+    result = build_windows(
+        values,
+        timestamps=frame.index.to_numpy(),
+        labels=frame["is_anomaly"].to_numpy(dtype=bool),
+        window_size=window_size,
+        stride=stride,
+        label_mode=label_mode,
+    )
+    if len(result.X_windows) < 2:
+        raise ValueError(
+            "temporal partition produced fewer than two windows; reduce "
+            "window_size or stride"
+        )
+    return result
+
+
+def _temporal_summary(
+    *,
+    model: TCNAutoencoderModel,
+    aggregation: str,
+    train_windows: WindowedData,
+    validation_windows: WindowedData,
+    test_windows: WindowedData,
+    test_window_scores: np.ndarray,
+    test_channel_errors: np.ndarray,
+    channel_names: tuple[str, ...],
+    test_sample_count: int,
+) -> dict[str, Any]:
+    covered_indices = np.unique(test_windows.source_indices)
+    mean_channel_errors = test_channel_errors.mean(axis=0)
+    return {
+        "model": "tcn_autoencoder",
+        "window_size": model.config.window_size,
+        "stride": model.config.stride,
+        "aggregation": aggregation,
+        "train_window_count": len(train_windows.X_windows),
+        "validation_window_count": len(validation_windows.X_windows),
+        "test_window_count": len(test_windows.X_windows),
+        "covered_timestamp_count": len(covered_indices),
+        "uncovered_timestamp_count": test_sample_count - len(covered_indices),
+        "window_score_mean": float(np.mean(test_window_scores)),
+        "window_score_max": float(np.max(test_window_scores)),
+        "timestamp_channel_error_mean": {
+            channel: float(mean_channel_errors[index])
+            for index, channel in enumerate(channel_names)
+        },
+    }
+
+
+def _evaluate_temporal_model(
+    *,
+    model: TCNAutoencoderModel,
+    train_values: np.ndarray,
+    validation_values: np.ndarray,
+    validation_frame: pd.DataFrame,
+    train_frame: pd.DataFrame,
+    test_values: np.ndarray,
+    test_frame: pd.DataFrame,
+    true_events: tuple[Any, ...],
+    channel_names: tuple[str, ...],
+    subsystem_mapping: dict[str, str],
+    settings: dict[str, Any],
+    output_dir: Path,
+    generated_report_root: Path,
+    seed: int,
+) -> dict[str, dict[str, Any]]:
+    """Fit and evaluate TCN windows without crossing split boundaries."""
+
+    temporal_settings = settings["temporal_autoencoder"]
+    label_mode = cast(LabelMode, str(temporal_settings.get("label_mode", "any")))
+    window_size = model.config.window_size
+    stride = model.config.stride
+    train_windows = _build_partition_windows(
+        values=train_values,
+        frame=train_frame,
+        window_size=window_size,
+        stride=stride,
+        label_mode=label_mode,
+    )
+    validation_windows = _build_partition_windows(
+        values=validation_values,
+        frame=validation_frame,
+        window_size=window_size,
+        stride=stride,
+        label_mode=label_mode,
+    )
+    test_windows = _build_partition_windows(
+        values=test_values,
+        frame=test_frame,
+        window_size=window_size,
+        stride=stride,
+        label_mode=label_mode,
+    )
+    model.fit_windows(train_windows.X_windows)
+    _, validation_window_errors = model.score_windows(
+        validation_windows.X_windows
+    )
+    test_window_scores, test_window_errors = model.score_windows(
+        test_windows.X_windows
+    )
+    aggregation = str(temporal_settings.get("aggregation", "mean"))
+    validation_scores, _ = aggregate_window_errors_to_timestamps(
+        source_indices=validation_windows.source_indices,
+        window_channel_errors=validation_window_errors,
+        n_samples=len(validation_values),
+        aggregation=cast(Aggregation, aggregation),
+    )
+    test_scores, test_channel_errors = aggregate_window_errors_to_timestamps(
+        source_indices=test_windows.source_indices,
+        window_channel_errors=test_window_errors,
+        n_samples=len(test_values),
+        aggregation=cast(Aggregation, aggregation),
+    )
+    evaluations = _build_threshold_evaluations(
+        validation_scores=validation_scores,
+        validation_frame=validation_frame,
+        test_scores=test_scores,
+        test_frame=test_frame,
+        true_events=true_events,
+        settings=settings,
+    )
+    temporal_artifacts = TemporalArtifacts(
+        source_indices=test_windows.source_indices,
+        window_scores=test_window_scores,
+        window_channel_errors=test_window_errors,
+        summary=_temporal_summary(
+            model=model,
+            aggregation=aggregation,
+            train_windows=train_windows,
+            validation_windows=validation_windows,
+            test_windows=test_windows,
+            test_window_scores=test_window_scores,
+            test_channel_errors=test_channel_errors,
+            channel_names=channel_names,
+            test_sample_count=len(test_values),
+        ),
+    )
+    results: dict[str, dict[str, Any]] = {}
+    for evaluation in evaluations:
+        model_variant, result = _write_variant(
+            model_name="tcn_autoencoder",
+            model=model,
+            evaluation=evaluation,
+            test_scores=test_scores,
+            channel_errors=test_channel_errors,
+            test_values=test_values,
+            test_frame=test_frame,
+            true_events=true_events,
+            channel_names=channel_names,
+            subsystem_mapping=subsystem_mapping,
+            settings=settings,
+            output_dir=output_dir,
+            generated_report_root=generated_report_root,
+            seed=seed,
+            temporal_artifacts=temporal_artifacts,
+        )
+        results[model_variant] = result
+    return results
+
+
 def run_synthetic_experiment(
     config_path: Path,
     output_dir: Path,
@@ -727,7 +945,7 @@ def run_synthetic_experiment(
     dashboard_path: Path | None = None,
     render_dashboard: bool = True,
 ) -> dict[str, Any]:
-    """Run one deterministic synthetic experiment and write SAK-v2.1 artefacts."""
+    """Run one deterministic synthetic experiment and write SAK-v2.2 artefacts."""
 
     config_path = config_path.resolve()
     repository_dir = config_path.parent.parent
@@ -736,7 +954,7 @@ def run_synthetic_experiment(
     run_seed = int(seed if seed is not None else settings["project"]["seed"])
     settings["project"]["seed"] = run_seed
     requested_models = tuple(models or ("pca", "dense_autoencoder"))
-    supported_models = {"pca", "dense_autoencoder"}
+    supported_models = {"pca", "dense_autoencoder", "tcn_autoencoder"}
     unknown_models = set(requested_models) - supported_models
     if not requested_models:
         raise ValueError("at least one model must be requested")
@@ -876,6 +1094,47 @@ def run_synthetic_experiment(
                 generated_report_root=generated_report_root,
                 seed=run_seed,
             ),
+        )
+    if "tcn_autoencoder" in requested_models:
+        temporal_settings = settings.get("temporal_autoencoder")
+        if not isinstance(temporal_settings, dict):
+            raise ValueError(
+                "temporal_autoencoder config is required for tcn_autoencoder"
+            )
+        model_results.update(
+            _evaluate_temporal_model(
+                model=TCNAutoencoderModel(
+                    config=TCNAutoencoderConfig(
+                        window_size=int(temporal_settings["window_size"]),
+                        stride=int(temporal_settings["stride"]),
+                        input_channels=len(dataset.channel_names),
+                        hidden_channels=int(temporal_settings["hidden_channels"]),
+                        latent_channels=int(temporal_settings["latent_channels"]),
+                        kernel_size=int(temporal_settings["kernel_size"]),
+                        num_layers=int(temporal_settings["num_layers"]),
+                        dropout=float(temporal_settings["dropout"]),
+                        epochs=int(temporal_settings["epochs"]),
+                        batch_size=int(temporal_settings["batch_size"]),
+                        learning_rate=float(temporal_settings["learning_rate"]),
+                        weight_decay=float(temporal_settings["weight_decay"]),
+                        patience=int(temporal_settings["patience"]),
+                        seed=run_seed,
+                    )
+                ),
+                train_values=train_values,
+                validation_values=validation_values,
+                validation_frame=frames.validation,
+                train_frame=frames.train,
+                test_values=test_values,
+                test_frame=frames.test,
+                true_events=test_events,
+                channel_names=dataset.channel_names,
+                subsystem_mapping=subsystem_mapping,
+                settings=settings,
+                output_dir=output_dir,
+                generated_report_root=generated_report_root,
+                seed=run_seed,
+            )
         )
     summary: dict[str, Any] = {
         "dataset": {

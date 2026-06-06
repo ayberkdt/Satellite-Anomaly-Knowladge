@@ -68,7 +68,7 @@ def build_early_warning_report_payload(
         "dataset": "synthetic",
         "seed": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "version": "SAK-v2.1",
+        "version": "SAK-v2.2",
         **(metadata or {}),
     }
     return {

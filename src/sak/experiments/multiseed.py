@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,8 @@ METRIC_PATHS: dict[str, tuple[str, str]] = {
     "channel_hit_at_3": ("xai_metrics", "channel_hit_at_3"),
     "subsystem_hit_at_1": ("xai_metrics", "subsystem_hit_at_1"),
     "subsystem_hit_at_3": ("xai_metrics", "subsystem_hit_at_3"),
+    "critical_window_hit_rate": ("xai_metrics", "critical_window_hit_rate"),
+    "mean_critical_window_iou": ("xai_metrics", "mean_critical_window_iou"),
 }
 
 
@@ -74,6 +77,7 @@ def run_multiseed_synthetic(
     config_path: Path,
     output_dir: Path,
     seeds: list[int],
+    models: Sequence[str] | None = None,
     render_dashboards: bool = False,
 ) -> list[dict[str, Any]]:
     """Run isolated synthetic experiments and write aggregate CSV and JSON."""
@@ -91,6 +95,7 @@ def run_multiseed_synthetic(
             config_path=config_path,
             output_dir=seed_dir,
             seed=seed,
+            models=models,
             generated_report_root=seed_dir / "reports" / "generated",
             data_output_dir=seed_dir / "data" / "synthetic",
             dashboard_path=seed_dir / "dashboard.html",
@@ -104,6 +109,7 @@ def run_multiseed_synthetic(
         output_dir / "aggregate_results.json",
         {
             "seeds": seeds,
+            "models": list(models) if models is not None else None,
             "results": aggregate_rows,
         },
     )

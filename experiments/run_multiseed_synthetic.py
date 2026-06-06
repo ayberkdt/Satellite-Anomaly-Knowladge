@@ -33,11 +33,18 @@ def main() -> None:
         action="store_true",
         help="Render a dashboard inside every seed directory.",
     )
+    parser.add_argument(
+        "--models",
+        nargs="+",
+        choices=("pca", "dense_autoencoder", "tcn_autoencoder"),
+        help="Optional model list; defaults to PCA and Dense Autoencoder.",
+    )
     arguments = parser.parse_args()
     aggregate = run_multiseed_synthetic(
         config_path=arguments.config,
         output_dir=arguments.output,
         seeds=arguments.seeds,
+        models=arguments.models,
         render_dashboards=arguments.render_dashboards,
     )
     print(json.dumps(aggregate, indent=2))

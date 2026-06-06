@@ -50,7 +50,7 @@ def main() -> None:
     parser.add_argument(
         "--models",
         nargs="+",
-        choices=("pca", "dense_autoencoder"),
+        choices=("pca", "dense_autoencoder", "tcn_autoencoder"),
     )
     arguments = parser.parse_args()
     summary = run(
