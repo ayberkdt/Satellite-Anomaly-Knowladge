@@ -15,9 +15,10 @@ data:
   sampling_frequency: 1min
 
 split:
-  strategy: chronological
-  train_fraction: 0.60
-  validation_fraction: 0.20
+  strategy: train_calibration_validation_test
+  train_fraction: 0.50
+  calibration_fraction: 0.20
+  validation_fraction: 0.10
   test_fraction: 0.20
   train_nominal_only: true
 
@@ -41,7 +42,7 @@ model:
 
 scoring:
   aggregation: mean_squared_error
-  calibration_set: validation
+  calibration_set: calibration
   threshold:
     method: quantile
     quantile: 0.995
@@ -64,4 +65,3 @@ evaluation:
   event_overlap_tolerance_steps: 5
   report_point_metrics: true
   report_event_metrics: true
-

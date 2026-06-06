@@ -1,4 +1,4 @@
-"""Leakage-safe anomaly score transforms fitted on validation scores."""
+"""Leakage-safe anomaly score transforms fitted on calibration scores."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ class ScoreCalibrator:
             raise ValueError("epsilon must be positive")
 
     def fit(self, scores: np.ndarray) -> "ScoreCalibrator":
-        """Fit transform parameters on nominal validation scores only."""
+        """Fit transform parameters on nominal calibration scores only."""
 
         values = _score_vector(scores)
         if self.method == "log1p" and np.any(values <= -1.0):
@@ -72,7 +72,7 @@ class ScoreCalibrator:
         return (values - self.median_) / self.scale_
 
     def fit_transform(self, scores: np.ndarray) -> np.ndarray:
-        """Fit and transform one validation score vector."""
+        """Fit and transform one calibration score vector."""
 
         return self.fit(scores).transform(scores)
 

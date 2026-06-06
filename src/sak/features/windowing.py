@@ -1,8 +1,9 @@
 """Leakage-aware utilities for building temporal telemetry windows.
 
 Windowing must be applied independently after the chronological train,
-validation and test split. Passing a concatenated dataset can create windows
-that cross split boundaries and leak future information into model training.
+calibration, validation and test split. Passing a concatenated dataset can
+create windows that cross split boundaries and leak future information into
+model training.
 """
 
 from __future__ import annotations
@@ -92,8 +93,9 @@ def build_windows(
 ) -> WindowedData | np.ndarray:
     """Build fixed-length windows without crossing an input partition boundary.
 
-    Call this function separately for train, validation and test partitions.
-    The function cannot infer split boundaries from a concatenated input.
+    Call this function separately for train, calibration, validation and test
+    partitions. The function cannot infer split boundaries from a concatenated
+    input.
     """
 
     matrix = _as_feature_matrix(values)

@@ -24,9 +24,10 @@ def select_threshold_candidate(
     candidates: list[dict[str, Any]],
     *,
     minimum_event_recall: float,
+    minimum_critical_recall: float = 0.0,
     maximum_false_alarms_per_day: float,
 ) -> ThresholdSelectionResult:
-    """Select by constraints, Event F1, delay, false alarms and Point F1."""
+    """Select a calibration operating point under event/critical constraints."""
 
     if not candidates:
         raise ValueError("at least one threshold candidate is required")
@@ -34,6 +35,8 @@ def select_threshold_candidate(
         candidate
         for candidate in candidates
         if _metric(candidate, "event_recall", 0.0) >= minimum_event_recall
+        and _metric(candidate, "critical_region_recall", 0.0)
+        >= minimum_critical_recall
         and _metric(candidate, "false_alarms_per_day", float("inf"))
         <= maximum_false_alarms_per_day
     ]
@@ -42,13 +45,20 @@ def select_threshold_candidate(
             feasible,
             key=lambda candidate: (
                 -_metric(candidate, "event_f1", 0.0),
+                -_metric(candidate, "critical_region_recall", 0.0),
+                -_metric(
+                    candidate,
+                    "median_lead_time_to_critical_minutes",
+                    float("-inf"),
+                ),
+                _metric(candidate, "false_alarms_per_day", float("inf")),
                 _metric(
                     candidate,
                     "median_detection_delay_minutes",
                     float("inf"),
                 ),
-                _metric(candidate, "false_alarms_per_day", float("inf")),
                 -_metric(candidate, "point_f1", 0.0),
+                -_metric(candidate, "channel_hit_at_3", 0.0),
             ),
         )
         return ThresholdSelectionResult(
@@ -61,6 +71,7 @@ def select_threshold_candidate(
         candidates,
         key=lambda candidate: (
             -_metric(candidate, "event_recall", 0.0),
+            -_metric(candidate, "critical_region_recall", 0.0),
             _metric(candidate, "false_alarms_per_day", float("inf")),
             -_metric(candidate, "event_f1", 0.0),
             _metric(
@@ -71,7 +82,7 @@ def select_threshold_candidate(
             -_metric(candidate, "point_f1", 0.0),
         ),
     )
-    has_validation_events = any(
+    has_calibration_events = any(
         int(candidate.get("true_events", 0)) > 0 for candidate in candidates
     )
     return ThresholdSelectionResult(
@@ -79,7 +90,7 @@ def select_threshold_candidate(
         constraints_satisfied=False,
         selection_reason=(
             "constraints_not_satisfied"
-            if has_validation_events
-            else "no_validation_events"
+            if has_calibration_events
+            else "no_calibration_events"
         ),
     )

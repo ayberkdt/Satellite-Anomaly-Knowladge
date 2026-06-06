@@ -89,7 +89,7 @@ def calibrate_mode_thresholds(
     context_column: str = "operational_mode",
     minimum_samples: int = 1,
 ) -> ModeThresholdCalibration:
-    """Calibrate global and operational-mode thresholds from nominal validation scores."""
+    """Calibrate global and operational-mode thresholds from nominal calibration scores."""
 
     values = _as_score_vector(scores)
     quantile_value = _validate_quantile(quantile)

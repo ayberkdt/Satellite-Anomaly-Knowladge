@@ -49,14 +49,17 @@ def event_metrics(
     tolerance: pd.Timedelta = pd.Timedelta(minutes=5),
     observation_duration: pd.Timedelta | None = None,
 ) -> dict[str, float | int | None | list[dict[str, object]]]:
-    """One-to-one interval matching with delay and false-alarm reporting."""
+    """One-to-one matching with anomaly delay and critical-region lead time."""
 
     unmatched_predictions = set(range(len(predicted_events)))
     matches: list[dict[str, object]] = []
 
     for true_event in sorted(true_events, key=lambda event: event.start):
         candidates: list[tuple[pd.Timedelta, int]] = []
-        expanded_start = true_event.start - tolerance
+        early_warning_start = pd.Timestamp(
+            getattr(true_event, "early_warning_region_start", true_event.start)
+        )
+        expanded_start = early_warning_start - tolerance
         expanded_end = true_event.end + tolerance
         for prediction_index in unmatched_predictions:
             prediction = predicted_events[prediction_index]
@@ -73,14 +76,29 @@ def event_metrics(
         _, prediction_index = min(candidates, key=lambda item: item[0])
         prediction = predicted_events[prediction_index]
         unmatched_predictions.remove(prediction_index)
+        critical_start = pd.Timestamp(
+            getattr(true_event, "failure_region_start", true_event.start)
+        )
+        anomaly_delay = (
+            prediction.start_time - true_event.start
+        ).total_seconds() / 60.0
+        lead_time = (
+            critical_start - prediction.start_time
+        ).total_seconds() / 60.0
+        detected_before_critical = prediction.start_time < critical_start
+        detected_in_precursor = (
+            prediction.start_time >= early_warning_start
+            and prediction.start_time < true_event.start
+        )
         matches.append(
             {
                 "true_event_id": true_event.event_id,
                 "predicted_event_id": prediction.event_id,
-                "detection_delay_minutes": (
-                    prediction.start_time - true_event.start
-                ).total_seconds()
-                / 60.0,
+                "detection_delay_minutes": anomaly_delay,
+                "detection_delay_from_anomaly_start": anomaly_delay,
+                "lead_time_to_critical_region_minutes": lead_time,
+                "detected_before_critical_region": detected_before_critical,
+                "detected_in_precursor_region": detected_in_precursor,
             }
         )
 
@@ -91,6 +109,15 @@ def event_metrics(
     recall = match_count / true_count if true_count else 0.0
     f1 = 2.0 * precision * recall / (precision + recall) if precision + recall else 0.0
     delays = [float(item["detection_delay_minutes"]) for item in matches]
+    lead_times = [
+        float(item["lead_time_to_critical_region_minutes"]) for item in matches
+    ]
+    detected_before_critical = sum(
+        bool(item["detected_before_critical_region"]) for item in matches
+    )
+    precursor_detections = sum(
+        bool(item["detected_in_precursor_region"]) for item in matches
+    )
     false_alarm_count = predicted_count - match_count
 
     false_alarms_per_day: float | None = None
@@ -108,9 +135,18 @@ def event_metrics(
         "false_alarm_events": false_alarm_count,
         "false_alarms_per_day": false_alarms_per_day,
         "median_detection_delay_minutes": float(np.median(delays)) if delays else None,
+        "median_lead_time_to_critical_minutes": (
+            float(np.median(lead_times)) if lead_times else None
+        ),
+        "critical_region_recall": match_count / true_count if true_count else 0.0,
+        "detected_before_critical_rate": (
+            detected_before_critical / true_count if true_count else 0.0
+        ),
+        "precursor_detection_rate": (
+            precursor_detections / true_count if true_count else 0.0
+        ),
         "p90_detection_delay_minutes": float(np.percentile(delays, 90.0))
         if delays
         else None,
         "matches": matches,
     }
-

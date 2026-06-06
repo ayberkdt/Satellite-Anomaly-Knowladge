@@ -7,10 +7,33 @@ synthetic:
   start: 2026-01-01T00:00:00Z
   orbit_period_steps: 96
   missing_fraction: 0.001
+  benign_events_per_partition: 2
 
 split:
-  train_fraction: 0.60
-  validation_fraction: 0.20
+  strategy: train_calibration_validation_test
+  train_fraction: 0.50
+  calibration_fraction: 0.20
+  validation_fraction: 0.10
+
+synthetic_anomaly_schedule:
+  calibration_events:
+    enabled: true
+    count_per_type: 1
+    severity_levels:
+      - medium
+  validation_events:
+    enabled: true
+    count_per_type: 1
+    severity_levels:
+      - low
+      - medium
+  test_events:
+    enabled: true
+    count_per_type: 2
+    severity_levels:
+      - low
+      - medium
+      - high
 
 preprocessing:
   max_forward_fill_steps: 5
@@ -59,6 +82,10 @@ early_warning:
 threshold_selection:
   strategy: quantile
   candidate_quantiles:
+    - 0.950
+    - 0.975
+    - 0.980
+    - 0.985
     - 0.990
     - 0.992
     - 0.995
@@ -68,6 +95,17 @@ threshold_selection:
   minimum_event_recall: 0.90
   maximum_false_alarms_per_day: 0.50
   tie_breaker: lower_delay
+
+operating_point_selection:
+  enabled: true
+  selection_partition: calibration
+  sanity_partition: validation
+  minimum_event_recall: 0.90
+  minimum_critical_recall: 0.90
+  maximum_false_alarms_per_day: 0.75
+  prefer_lower_delay: true
+  prefer_higher_lead_time: true
+  fallback: highest_recall
 
 temporal_calibration:
   enabled: true
@@ -86,11 +124,35 @@ alarm_filter_sweep:
     - 2
     - 3
     - 4
+    - 5
   lookback_steps:
     - 5
     - 7
   merge_gap_steps:
     - 10
+
+temporal_ablation:
+  enabled: false
+  window_size:
+    - 30
+    - 60
+    - 120
+  stride:
+    - 1
+    - 5
+  latent_channels:
+    - 4
+    - 8
+    - 16
+  hidden_channels:
+    - 16
+    - 32
+  kernel_size:
+    - 3
+    - 5
+  num_layers:
+    - 2
+    - 3
 
 explainability:
   top_k_channels: 5

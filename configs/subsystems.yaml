@@ -9,28 +9,38 @@ subsystems:
       - solar_array_voltage
       - solar_array_current
       - bus_voltage
+      - bus_current
   THERMAL:
     display_name: Thermal Control
     channels:
       - panel_temperature
       - payload_temperature
+      - radiator_temperature
+      - heater_state
   AOCS:
     display_name: Attitude and Orbit Control System
     channels:
-      - angular_rate_x
-      - angular_rate_y
-      - angular_rate_z
-      - reaction_wheel_speed
-      - sun_sensor_angle
+      - reaction_wheel_speed_x
+      - reaction_wheel_speed_y
+      - reaction_wheel_speed_z
+      - reaction_wheel_current_x
+      - reaction_wheel_current_y
+      - reaction_wheel_current_z
+      - gyro_rate_x
+      - gyro_rate_y
+      - gyro_rate_z
+      - attitude_error
   COMM:
     display_name: Communications
     channels:
       - transmitter_power
       - receiver_rssi
+      - receiver_temperature
+      - antenna_temperature
       - link_margin
   PAYLOAD:
     display_name: Payload
     channels:
       - payload_current
       - payload_temperature
-      - payload_status
+      - payload_mode

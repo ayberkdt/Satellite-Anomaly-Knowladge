@@ -17,6 +17,68 @@ class ChronologicalFrames:
     test: pd.DataFrame
 
 
+@dataclass(frozen=True)
+class CalibrationFrames:
+    """Four non-overlapping chronological experiment partitions."""
+
+    train: pd.DataFrame
+    calibration: pd.DataFrame
+    validation: pd.DataFrame
+    test: pd.DataFrame
+
+
+def _validate_chronological_frame(frame: pd.DataFrame) -> None:
+    if frame.empty:
+        raise ValueError("frame cannot be empty")
+    if not frame.index.is_monotonic_increasing:
+        raise ValueError("frame timestamps must be monotonically increasing")
+
+
+def _validate_split_fractions(
+    fractions: tuple[float, ...],
+    names: tuple[str, ...],
+) -> None:
+    if any(value <= 0.0 for value in fractions):
+        joined = ", ".join(names)
+        raise ValueError(f"{joined} fractions must be positive")
+    if sum(fractions) >= 1.0:
+        raise ValueError("split fractions must leave a test partition")
+
+
+def _split_offsets(total_rows: int, fractions: tuple[float, ...]) -> tuple[int, ...]:
+    offsets: list[int] = []
+    cursor = 0
+    for fraction in fractions:
+        cursor += int(total_rows * fraction)
+        offsets.append(cursor)
+    segment_lengths = [offsets[0]]
+    segment_lengths.extend(right - left for left, right in zip(offsets, offsets[1:]))
+    segment_lengths.append(total_rows - offsets[-1])
+    if any(length <= 0 for length in segment_lengths):
+        raise ValueError("split fractions produce an empty partition")
+    return tuple(offsets)
+
+
+def chronological_calibration_split(
+    frame: pd.DataFrame,
+    train_fraction: float = 0.50,
+    calibration_fraction: float = 0.20,
+    validation_fraction: float = 0.10,
+) -> CalibrationFrames:
+    """Create train/calibration/validation/test partitions without overlap."""
+
+    fractions = (train_fraction, calibration_fraction, validation_fraction)
+    _validate_chronological_frame(frame)
+    _validate_split_fractions(fractions, ("train", "calibration", "validation"))
+    train_end, calibration_end, validation_end = _split_offsets(len(frame), fractions)
+    return CalibrationFrames(
+        train=frame.iloc[:train_end].copy(),
+        calibration=frame.iloc[train_end:calibration_end].copy(),
+        validation=frame.iloc[calibration_end:validation_end].copy(),
+        test=frame.iloc[validation_end:].copy(),
+    )
+
+
 def chronological_split(
     frame: pd.DataFrame,
     train_fraction: float = 0.60,
@@ -24,13 +86,10 @@ def chronological_split(
 ) -> ChronologicalFrames:
     """Split before any learned preprocessing to prevent future leakage."""
 
-    if train_fraction <= 0.0 or validation_fraction <= 0.0:
-        raise ValueError("train and validation fractions must be positive")
-    if train_fraction + validation_fraction >= 1.0:
-        raise ValueError("train and validation fractions must leave a test partition")
-
-    train_end = int(len(frame) * train_fraction)
-    validation_end = train_end + int(len(frame) * validation_fraction)
+    fractions = (train_fraction, validation_fraction)
+    _validate_chronological_frame(frame)
+    _validate_split_fractions(fractions, ("train", "validation"))
+    train_end, validation_end = _split_offsets(len(frame), fractions)
     return ChronologicalFrames(
         train=frame.iloc[:train_end].copy(),
         validation=frame.iloc[train_end:validation_end].copy(),
@@ -50,10 +109,16 @@ class RobustTelemetryPreprocessor:
 
     def fit(self, frame: pd.DataFrame) -> "RobustTelemetryPreprocessor":
         values = frame.loc[:, self.channel_names].to_numpy(dtype=float)
+        if np.isinf(values).any():
+            raise ValueError("cannot fit preprocessor with infinite values")
+        if np.isnan(values).all(axis=0).any():
+            raise ValueError("cannot fit preprocessor with all-missing channels")
         medians = np.nanmedian(values, axis=0)
         q25 = np.nanpercentile(values, 25.0, axis=0)
         q75 = np.nanpercentile(values, 75.0, axis=0)
         scales = q75 - q25
+        if not np.all(np.isfinite(medians)) or not np.all(np.isfinite(scales)):
+            raise ValueError("cannot fit preprocessor with all-missing channels")
         scales[scales < self.epsilon] = 1.0
         self.medians_ = medians
         self.scales_ = scales
@@ -73,4 +138,3 @@ class RobustTelemetryPreprocessor:
 
     def fit_transform(self, frame: pd.DataFrame) -> np.ndarray:
         return self.fit(frame).transform(frame)
-

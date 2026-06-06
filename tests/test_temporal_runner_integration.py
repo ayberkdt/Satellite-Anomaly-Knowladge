@@ -76,6 +76,18 @@ def test_temporal_model_runs_through_shared_pipeline(tmp_path: Path) -> None:
         assert (
             variant_dir / "diagnostics" / "anomaly_type_performance.csv"
         ).exists()
+        assert (
+            variant_dir / "diagnostics" / "operating_point_selection.json"
+        ).exists()
+        assert (
+            variant_dir / "diagnostics" / "calibration_partition_metrics.json"
+        ).exists()
+        assert (
+            variant_dir / "diagnostics" / "validation_partition_metrics.json"
+        ).exists()
+        assert (
+            variant_dir / "diagnostics" / "test_partition_metrics.json"
+        ).exists()
         assert (variant_dir / "xai" / "explanations.json").exists()
         assert (variant_dir / "xai" / "temporal_error_summary.json").exists()
         assert (
@@ -93,3 +105,6 @@ def test_temporal_model_runs_through_shared_pipeline(tmp_path: Path) -> None:
         report = json.loads(report_files[0].read_text(encoding="utf-8"))
         assert report["model_name"] == "tcn_autoencoder"
         assert (variant_dir / "reports" / f"{report['report_id']}.md").exists()
+    assert (output_dir / "data_quality_report.json").exists()
+    assert (output_dir / "split_manifest.json").exists()
+    assert (output_dir / "operating_point_comparison.csv").exists()

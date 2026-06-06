@@ -18,6 +18,23 @@ def _event_lookup(events: Sequence[dict[str, Any]]) -> dict[str, dict[str, Any]]
     return lookup
 
 
+def _top_subsystem_names(event: dict[str, Any]) -> list[str]:
+    direct = [
+        str(item["subsystem"])
+        for item in event.get("top_subsystems", [])
+        if isinstance(item, dict) and item.get("subsystem")
+    ]
+    if direct:
+        return list(dict.fromkeys(direct))
+    return list(
+        dict.fromkeys(
+            str(item["subsystem"])
+            for item in event.get("top_channels", [])
+            if item.get("subsystem")
+        )
+    )
+
+
 def build_event_diagnostic_rows(
     *,
     model_variant: str,
@@ -61,13 +78,7 @@ def build_event_diagnostic_rows(
             )
         top_channel_payload = event.get("top_channels", [])[:3]
         top_channels = [str(item["channel"]) for item in top_channel_payload]
-        top_subsystems = list(
-            dict.fromkeys(
-                str(item["subsystem"])
-                for item in top_channel_payload
-                if item.get("subsystem")
-            )
-        )
+        top_subsystems = _top_subsystem_names(event)[:3]
         expected_channels = {str(item) for item in truth["affected_channels"]}
         expected_subsystem = str(truth["expected_subsystem"])
         rows.append(
@@ -170,19 +181,7 @@ def build_false_positive_rows(
 
         top_channel_payload = event.get("top_channels", [])[:3]
         top_channels = [str(item["channel"]) for item in top_channel_payload]
-        top_subsystems = [
-            str(item["subsystem"])
-            for item in event.get("top_subsystems", [])[:3]
-            if isinstance(item, dict) and item.get("subsystem")
-        ]
-        if not top_subsystems:
-            top_subsystems = list(
-                dict.fromkeys(
-                    str(item["subsystem"])
-                    for item in top_channel_payload
-                    if item.get("subsystem")
-                )
-            )
+        top_subsystems = _top_subsystem_names(event)[:3]
         rows.append(
             {
                 "model_variant": model_variant,
@@ -272,11 +271,7 @@ def build_anomaly_type_performance_rows(
             )
         top_channel_payload = event.get("top_channels", [])[:3]
         top_channels = [str(item["channel"]) for item in top_channel_payload]
-        top_subsystems = {
-            str(item["subsystem"])
-            for item in top_channel_payload
-            if item.get("subsystem")
-        }
+        top_subsystems = set(_top_subsystem_names(event))
         critical_start = pd.Timestamp(event["critical_window_start"])
         critical_end = pd.Timestamp(event["critical_window_end"])
         truth_start = pd.Timestamp(truth["start"])

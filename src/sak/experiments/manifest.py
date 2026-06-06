@@ -47,30 +47,33 @@ def build_run_manifest(
     dataset_path: Path,
     seed: int,
     train_index: pd.DatetimeIndex,
+    calibration_index: pd.DatetimeIndex,
     validation_index: pd.DatetimeIndex,
     test_index: pd.DatetimeIndex,
     models: list[str],
     repository_dir: Path,
 ) -> dict[str, Any]:
-    """Build the stable SAK-v2.3 run metadata payload."""
+    """Build the stable SAK-v2.4 run metadata payload."""
 
     created_at = datetime.now(timezone.utc)
     payload: dict[str, Any] = {
-        "run_id": f"sak-v2.3-{created_at:%Y%m%dT%H%M%SZ}-seed-{seed}",
+        "run_id": f"sak-v2.4-{created_at:%Y%m%dT%H%M%SZ}-seed-{seed}",
         "created_at": created_at.isoformat(),
-        "sak_version": "SAK-v2.3",
+        "sak_version": "SAK-v2.4",
         "seed": seed,
         "config_path": str(config_path),
         "dataset_name": "synthetic",
         "dataset_checksum": file_checksum(dataset_path),
         "train_start": train_index[0].isoformat(),
         "train_end": train_index[-1].isoformat(),
+        "calibration_start": calibration_index[0].isoformat(),
+        "calibration_end": calibration_index[-1].isoformat(),
         "validation_start": validation_index[0].isoformat(),
         "validation_end": validation_index[-1].isoformat(),
         "test_start": test_index[0].isoformat(),
         "test_end": test_index[-1].isoformat(),
         "models": models,
-        "notes": "Temporal score calibration and false-alarm suppression run",
+        "notes": "Anomalous calibration and mission-like data realism run",
     }
     git_hash = optional_git_hash(repository_dir)
     if git_hash is not None:

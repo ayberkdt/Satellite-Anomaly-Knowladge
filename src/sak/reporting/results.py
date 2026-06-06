@@ -155,6 +155,10 @@ def event_diagnostic_rows(
         }
 
         for truth in manifest:
+            if truth.get("event_class") == "benign_transient":
+                continue
+            if truth.get("partition") not in (None, "test"):
+                continue
             match = matches.get(str(truth["event_id"]))
             if match is None:
                 rows.append(

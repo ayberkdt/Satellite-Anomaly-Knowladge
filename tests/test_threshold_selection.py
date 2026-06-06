@@ -65,7 +65,7 @@ def test_fallback_prefers_recall_and_marks_constraints_unsatisfied() -> None:
     assert result.selection_reason == "constraints_not_satisfied"
 
 
-def test_nominal_validation_is_reported_explicitly() -> None:
+def test_missing_calibration_events_are_reported_explicitly() -> None:
     candidates = [
         _candidate(
             event_f1=0.0,
@@ -82,4 +82,4 @@ def test_nominal_validation_is_reported_explicitly() -> None:
     )
 
     assert result.constraints_satisfied is False
-    assert result.selection_reason == "no_validation_events"
+    assert result.selection_reason == "no_calibration_events"

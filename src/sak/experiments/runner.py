@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, Literal, Protocol, cast
 
 import numpy as np
 import pandas as pd
@@ -22,6 +23,7 @@ from sak.anomaly.score_diagnostics import (
     threshold_margin_summary,
 )
 from sak.contracts import AlarmEvent, ExplanationResult
+from sak.data import build_data_quality_report
 from sak.evaluation import event_metrics, point_metrics
 from sak.experiments.artifacts import (
     VariantArtifactPaths,
@@ -31,6 +33,8 @@ from sak.experiments.artifacts import (
     write_json,
 )
 from sak.experiments.alarm_selection import (
+    AlarmSelection,
+    AppliedAlarmSelection,
     apply_alarm_selection,
     select_alarm_configuration,
 )
@@ -51,7 +55,10 @@ from sak.models.temporal import (
     aggregate_window_errors_to_timestamps,
 )
 from sak.models.temporal.scoring import Aggregation
-from sak.preprocessing import RobustTelemetryPreprocessor, chronological_split
+from sak.preprocessing import (
+    RobustTelemetryPreprocessor,
+    chronological_calibration_split,
+)
 from sak.reporting import (
     build_early_warning_report_payload,
     render_early_warning_report_payload,
@@ -92,6 +99,9 @@ class ThresholdEvaluation:
     threshold_sweep: list[dict[str, Any]]
     calibration_metadata: dict[str, Any]
     filter_sweep: list[dict[str, Any]]
+    calibration_partition_result: dict[str, Any]
+    validation_partition_result: dict[str, Any]
+    fixed_quantile_test_result: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -170,93 +180,193 @@ def _evaluate_warning(
     return detected_events, point_result, event_result
 
 
-def _build_threshold_evaluations(
+def _fixed_quantile_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of settings pinned to the legacy fixed-quantile baseline."""
+
+    fixed_settings = deepcopy(settings)
+    fixed_settings.setdefault("threshold_selection", {})["strategy"] = "quantile"
+    return fixed_settings
+
+
+def _apply_and_evaluate_selection(
     *,
+    selection: AlarmSelection,
+    calibration_scores: np.ndarray,
+    calibration_frame: pd.DataFrame,
+    target_scores: np.ndarray,
+    target_frame: pd.DataFrame,
+    target_events: tuple[Any, ...],
+    settings: dict[str, Any],
+) -> tuple[AppliedAlarmSelection, tuple[Any, ...], dict[str, Any], dict[str, Any]]:
+    """Apply a calibration-selected alarm setup to one partition and score it."""
+
+    warning = apply_alarm_selection(
+        selection=selection,
+        calibration_scores=calibration_scores,
+        calibration_frame=calibration_frame,
+        target_scores=target_scores,
+        target_frame=target_frame,
+        settings=settings,
+    )
+    detected_events, point_result, event_result = _evaluate_warning(
+        test_frame=target_frame,
+        true_events=target_events,
+        smoothed_scores=warning.smoothed_scores,
+        alarm_mask=warning.alarm_mask,
+        merge_gap_steps=selection.merge_gap_steps,
+    )
+    return warning, detected_events, point_result, event_result
+
+
+def _build_one_threshold_evaluation(
+    *,
+    threshold_mode: Literal["global", "mode_aware"],
+    calibration_scores: np.ndarray,
+    calibration_frame: pd.DataFrame,
+    calibration_events: tuple[Any, ...],
     validation_scores: np.ndarray,
     validation_frame: pd.DataFrame,
+    validation_events: tuple[Any, ...],
     test_scores: np.ndarray,
     test_frame: pd.DataFrame,
-    true_events: tuple[Any, ...],
+    test_events: tuple[Any, ...],
+    settings: dict[str, Any],
+    fixed_settings: dict[str, Any],
+    score_calibration: dict[str, Any],
+) -> ThresholdEvaluation:
+    """Build the selected and fixed-quantile evaluation for one threshold mode."""
+
+    selection = select_alarm_configuration(
+        calibration_scores=calibration_scores,
+        calibration_frame=calibration_frame,
+        calibration_events=calibration_events,
+        threshold_mode=threshold_mode,
+        settings=settings,
+    )
+    _, _, calibration_point, calibration_event = _apply_and_evaluate_selection(
+        selection=selection,
+        calibration_scores=calibration_scores,
+        calibration_frame=calibration_frame,
+        target_scores=calibration_scores,
+        target_frame=calibration_frame,
+        target_events=calibration_events,
+        settings=settings,
+    )
+    _, _, validation_point, validation_event = _apply_and_evaluate_selection(
+        selection=selection,
+        calibration_scores=calibration_scores,
+        calibration_frame=calibration_frame,
+        target_scores=validation_scores,
+        target_frame=validation_frame,
+        target_events=validation_events,
+        settings=settings,
+    )
+    warning, detected_events, point_result, event_result = (
+        _apply_and_evaluate_selection(
+            selection=selection,
+            calibration_scores=calibration_scores,
+            calibration_frame=calibration_frame,
+            target_scores=test_scores,
+            target_frame=test_frame,
+            target_events=test_events,
+            settings=settings,
+        )
+    )
+
+    fixed_selection = select_alarm_configuration(
+        calibration_scores=calibration_scores,
+        calibration_frame=calibration_frame,
+        calibration_events=calibration_events,
+        threshold_mode=threshold_mode,
+        settings=fixed_settings,
+    )
+    _, _, fixed_point, fixed_event = _apply_and_evaluate_selection(
+        selection=fixed_selection,
+        calibration_scores=calibration_scores,
+        calibration_frame=calibration_frame,
+        target_scores=test_scores,
+        target_frame=test_frame,
+        target_events=test_events,
+        settings=fixed_settings,
+    )
+    return ThresholdEvaluation(
+        strategy=threshold_mode,
+        threshold=warning.threshold,
+        thresholds=warning.thresholds,
+        smoothed_scores=warning.smoothed_scores,
+        alarm_mask=warning.alarm_mask,
+        detected_events=detected_events,
+        point_result=point_result,
+        event_result=event_result,
+        threshold_metadata=warning.threshold_metadata,
+        threshold_sweep=selection.sweep_rows,
+        calibration_metadata={
+            **score_calibration,
+            **selection.to_metadata(),
+        },
+        filter_sweep=selection.sweep_rows,
+        calibration_partition_result={
+            "point_metrics": calibration_point,
+            "event_metrics": calibration_event,
+        },
+        validation_partition_result={
+            "point_metrics": validation_point,
+            "event_metrics": validation_event,
+        },
+        fixed_quantile_test_result={
+            "point_metrics": fixed_point,
+            "event_metrics": fixed_event,
+        },
+    )
+
+
+def _build_threshold_evaluations(
+    *,
+    calibration_scores: np.ndarray,
+    calibration_frame: pd.DataFrame,
+    calibration_events: tuple[Any, ...],
+    validation_scores: np.ndarray,
+    validation_frame: pd.DataFrame,
+    validation_events: tuple[Any, ...],
+    test_scores: np.ndarray,
+    test_frame: pd.DataFrame,
+    test_events: tuple[Any, ...],
     settings: dict[str, Any],
     score_calibration: dict[str, Any],
 ) -> tuple[ThresholdEvaluation, ThresholdEvaluation]:
-    global_selection = select_alarm_configuration(
-        validation_scores=validation_scores,
-        validation_frame=validation_frame,
-        threshold_mode="global",
-        settings=settings,
+    fixed_settings = _fixed_quantile_settings(settings)
+    return (
+        _build_one_threshold_evaluation(
+            threshold_mode="global",
+            calibration_scores=calibration_scores,
+            calibration_frame=calibration_frame,
+            calibration_events=calibration_events,
+            validation_scores=validation_scores,
+            validation_frame=validation_frame,
+            validation_events=validation_events,
+            test_scores=test_scores,
+            test_frame=test_frame,
+            test_events=test_events,
+            settings=settings,
+            fixed_settings=fixed_settings,
+            score_calibration=score_calibration,
+        ),
+        _build_one_threshold_evaluation(
+            threshold_mode="mode_aware",
+            calibration_scores=calibration_scores,
+            calibration_frame=calibration_frame,
+            calibration_events=calibration_events,
+            validation_scores=validation_scores,
+            validation_frame=validation_frame,
+            validation_events=validation_events,
+            test_scores=test_scores,
+            test_frame=test_frame,
+            test_events=test_events,
+            settings=settings,
+            fixed_settings=fixed_settings,
+            score_calibration=score_calibration,
+        ),
     )
-    global_warning = apply_alarm_selection(
-        selection=global_selection,
-        validation_scores=validation_scores,
-        validation_frame=validation_frame,
-        test_scores=test_scores,
-        test_frame=test_frame,
-        settings=settings,
-    )
-    global_events, global_point, global_event = _evaluate_warning(
-        test_frame=test_frame,
-        true_events=true_events,
-        smoothed_scores=global_warning.smoothed_scores,
-        alarm_mask=global_warning.alarm_mask,
-        merge_gap_steps=global_selection.merge_gap_steps,
-    )
-    global_evaluation = ThresholdEvaluation(
-        strategy="global",
-        threshold=global_warning.threshold,
-        thresholds=global_warning.thresholds,
-        smoothed_scores=global_warning.smoothed_scores,
-        alarm_mask=global_warning.alarm_mask,
-        detected_events=global_events,
-        point_result=global_point,
-        event_result=global_event,
-        threshold_metadata=global_warning.threshold_metadata,
-        threshold_sweep=global_selection.sweep_rows,
-        calibration_metadata={
-            **score_calibration,
-            **global_selection.to_metadata(),
-        },
-        filter_sweep=global_selection.sweep_rows,
-    )
-    mode_selection = select_alarm_configuration(
-        validation_scores=validation_scores,
-        validation_frame=validation_frame,
-        threshold_mode="mode_aware",
-        settings=settings,
-    )
-    mode_warning = apply_alarm_selection(
-        selection=mode_selection,
-        validation_scores=validation_scores,
-        validation_frame=validation_frame,
-        test_scores=test_scores,
-        test_frame=test_frame,
-        settings=settings,
-    )
-    mode_events, mode_point, mode_event = _evaluate_warning(
-        test_frame=test_frame,
-        true_events=true_events,
-        smoothed_scores=mode_warning.smoothed_scores,
-        alarm_mask=mode_warning.alarm_mask,
-        merge_gap_steps=mode_selection.merge_gap_steps,
-    )
-    mode_evaluation = ThresholdEvaluation(
-        strategy="mode_aware",
-        threshold=mode_warning.threshold,
-        thresholds=mode_warning.thresholds,
-        smoothed_scores=mode_warning.smoothed_scores,
-        alarm_mask=mode_warning.alarm_mask,
-        detected_events=mode_events,
-        point_result=mode_point,
-        event_result=mode_event,
-        threshold_metadata=mode_warning.threshold_metadata,
-        threshold_sweep=mode_selection.sweep_rows,
-        calibration_metadata={
-            **score_calibration,
-            **mode_selection.to_metadata(),
-        },
-        filter_sweep=mode_selection.sweep_rows,
-    )
-    return global_evaluation, mode_evaluation
 
 
 def _build_explanations(
@@ -426,7 +536,7 @@ def _write_reports(
             model_variant=model_variant,
             threshold_strategy=evaluation.strategy,
             source_event_id=source_ids.get(detected.event_id),
-            metadata={"dataset": "synthetic", "seed": seed, "version": "SAK-v2.3"},
+            metadata={"dataset": "synthetic", "seed": seed, "version": "SAK-v2.4"},
         )
         markdown = render_early_warning_report_payload(report_payload)
         for report_dir in (paths.reports, generated_variant_dir):
@@ -523,20 +633,22 @@ def _model_metadata(model: Any) -> dict[str, Any]:
 
 def _calibrate_model_scores(
     *,
+    calibration_scores: np.ndarray,
     validation_scores: np.ndarray,
     test_scores: np.ndarray,
-    validation_frame: pd.DataFrame,
+    calibration_frame: pd.DataFrame,
     method: str,
-) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
-    """Fit score calibration on nominal validation rows and transform test."""
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
+    """Fit on nominal calibration scores, then transform all later partitions."""
 
-    nominal_mask = ~validation_frame["is_anomaly"].to_numpy(dtype=bool)
+    nominal_mask = ~calibration_frame["is_anomaly"].to_numpy(dtype=bool)
     calibrator = ScoreCalibrator(method=cast(Any, method)).fit(
-        validation_scores[nominal_mask]
+        calibration_scores[nominal_mask]
     )
     metadata = calibrator.to_dict()
     metadata["score_transform"] = method
     return (
+        calibrator.transform(calibration_scores),
         calibrator.transform(validation_scores),
         calibrator.transform(test_scores),
         metadata,
@@ -634,6 +746,25 @@ def _write_variant(
     write_csv(paths.root / "event_diagnostics.csv", diagnostic_rows)
     write_csv(paths.root / "false_positive_diagnostics.csv", false_positive_rows)
     write_csv(paths.diagnostics / "filter_sweep.csv", evaluation.filter_sweep)
+    write_json(
+        paths.diagnostics / "operating_point_selection.json",
+        evaluation.calibration_metadata,
+    )
+    write_json(
+        paths.diagnostics / "calibration_partition_metrics.json",
+        evaluation.calibration_partition_result,
+    )
+    write_json(
+        paths.diagnostics / "validation_partition_metrics.json",
+        evaluation.validation_partition_result,
+    )
+    write_json(
+        paths.diagnostics / "test_partition_metrics.json",
+        {
+            "point_metrics": evaluation.point_result,
+            "event_metrics": evaluation.event_result,
+        },
+    )
     write_csv(
         paths.diagnostics / "anomaly_type_performance.csv",
         anomaly_type_rows,
@@ -716,7 +847,16 @@ def _write_variant(
         "xai_metrics": xai_result,
         "threshold_sweep": evaluation.threshold_sweep,
         "calibration": evaluation.calibration_metadata,
+        "calibration_partition_result": evaluation.calibration_partition_result,
+        "validation_partition_result": evaluation.validation_partition_result,
+        "score_semantics": {
+            "alarm_score_transform": evaluation.calibration_metadata.get(
+                "score_transform", "none"
+            ),
+            "xai_channel_errors": "raw_reconstruction_error",
+        },
         "model": _model_metadata(model),
+        "fixed_quantile_test": evaluation.fixed_quantile_test_result,
     }
     write_json(paths.root / "metrics.json", result)
     return model_variant, result
@@ -727,11 +867,15 @@ def _evaluate_model(
     model_name: str,
     model: ReconstructionModel,
     train_values: np.ndarray,
+    calibration_values: np.ndarray,
+    calibration_frame: pd.DataFrame,
+    calibration_events: tuple[Any, ...],
     validation_values: np.ndarray,
     validation_frame: pd.DataFrame,
+    validation_events: tuple[Any, ...],
     test_values: np.ndarray,
     test_frame: pd.DataFrame,
-    true_events: tuple[Any, ...],
+    test_events: tuple[Any, ...],
     channel_names: tuple[str, ...],
     subsystem_mapping: dict[str, str],
     settings: dict[str, Any],
@@ -740,22 +884,33 @@ def _evaluate_model(
     seed: int,
 ) -> dict[str, dict[str, Any]]:
     model.fit(train_values)
+    calibration_scores, _ = model.score(calibration_values)
     validation_scores, _ = model.score(validation_values)
     test_scores, channel_errors = model.score(test_values)
     if channel_errors is None:
         raise RuntimeError(f"{model_name} must provide channel reconstruction errors")
-    validation_scores, test_scores, score_calibration = _calibrate_model_scores(
+    (
+        calibration_scores,
+        validation_scores,
+        test_scores,
+        score_calibration,
+    ) = _calibrate_model_scores(
+        calibration_scores=calibration_scores,
         validation_scores=validation_scores,
         test_scores=test_scores,
-        validation_frame=validation_frame,
-        method="identity",
+        calibration_frame=calibration_frame,
+        method="none",
     )
     evaluations = _build_threshold_evaluations(
+        calibration_scores=calibration_scores,
+        calibration_frame=calibration_frame,
+        calibration_events=calibration_events,
         validation_scores=validation_scores,
         validation_frame=validation_frame,
+        validation_events=validation_events,
         test_scores=test_scores,
         test_frame=test_frame,
-        true_events=true_events,
+        test_events=test_events,
         settings=settings,
         score_calibration=score_calibration,
     )
@@ -769,7 +924,7 @@ def _evaluate_model(
             channel_errors=channel_errors,
             test_values=test_values,
             test_frame=test_frame,
-            true_events=true_events,
+            true_events=test_events,
             channel_names=channel_names,
             subsystem_mapping=subsystem_mapping,
             settings=settings,
@@ -812,6 +967,7 @@ def _temporal_summary(
     model: TCNAutoencoderModel,
     aggregation: str,
     train_windows: WindowedData,
+    calibration_windows: WindowedData,
     validation_windows: WindowedData,
     test_windows: WindowedData,
     test_window_scores: np.ndarray,
@@ -820,6 +976,7 @@ def _temporal_summary(
     test_sample_count: int,
 ) -> dict[str, Any]:
     covered_indices = np.unique(test_windows.source_indices)
+    coverage_ratio = len(covered_indices) / test_sample_count
     mean_channel_errors = test_channel_errors.mean(axis=0)
     return {
         "model": "tcn_autoencoder",
@@ -827,10 +984,13 @@ def _temporal_summary(
         "stride": model.config.stride,
         "aggregation": aggregation,
         "train_window_count": len(train_windows.X_windows),
+        "calibration_window_count": len(calibration_windows.X_windows),
         "validation_window_count": len(validation_windows.X_windows),
         "test_window_count": len(test_windows.X_windows),
         "covered_timestamp_count": len(covered_indices),
         "uncovered_timestamp_count": test_sample_count - len(covered_indices),
+        "coverage_ratio": coverage_ratio,
+        "coverage_warning": coverage_ratio < 0.95,
         "window_score_mean": float(np.mean(test_window_scores)),
         "window_score_max": float(np.max(test_window_scores)),
         "timestamp_channel_error_mean": {
@@ -844,12 +1004,16 @@ def _evaluate_temporal_model(
     *,
     model: TCNAutoencoderModel,
     train_values: np.ndarray,
+    calibration_values: np.ndarray,
+    calibration_frame: pd.DataFrame,
+    calibration_events: tuple[Any, ...],
     validation_values: np.ndarray,
     validation_frame: pd.DataFrame,
+    validation_events: tuple[Any, ...],
     train_frame: pd.DataFrame,
     test_values: np.ndarray,
     test_frame: pd.DataFrame,
-    true_events: tuple[Any, ...],
+    test_events: tuple[Any, ...],
     channel_names: tuple[str, ...],
     subsystem_mapping: dict[str, str],
     settings: dict[str, Any],
@@ -870,6 +1034,13 @@ def _evaluate_temporal_model(
         stride=stride,
         label_mode=label_mode,
     )
+    calibration_windows = _build_partition_windows(
+        values=calibration_values,
+        frame=calibration_frame,
+        window_size=window_size,
+        stride=stride,
+        label_mode=label_mode,
+    )
     validation_windows = _build_partition_windows(
         values=validation_values,
         frame=validation_frame,
@@ -885,6 +1056,9 @@ def _evaluate_temporal_model(
         label_mode=label_mode,
     )
     model.fit_windows(train_windows.X_windows)
+    _, calibration_window_errors = model.score_windows(
+        calibration_windows.X_windows
+    )
     _, validation_window_errors = model.score_windows(
         validation_windows.X_windows
     )
@@ -903,6 +1077,12 @@ def _evaluate_temporal_model(
         if calibration_enabled
         else str(temporal_settings.get("aggregation", "mean"))
     )
+    calibration_scores, _ = aggregate_window_errors_to_timestamps(
+        source_indices=calibration_windows.source_indices,
+        window_channel_errors=calibration_window_errors,
+        n_samples=len(calibration_values),
+        aggregation=cast(Aggregation, aggregation),
+    )
     validation_scores, _ = aggregate_window_errors_to_timestamps(
         source_indices=validation_windows.source_indices,
         window_channel_errors=validation_window_errors,
@@ -915,6 +1095,8 @@ def _evaluate_temporal_model(
         n_samples=len(test_values),
         aggregation=cast(Aggregation, aggregation),
     )
+    covered_calibration = np.zeros(len(calibration_scores), dtype=bool)
+    covered_calibration[np.unique(calibration_windows.source_indices)] = True
     covered_validation = np.zeros(len(validation_scores), dtype=bool)
     covered_validation[np.unique(validation_windows.source_indices)] = True
     covered_test = np.zeros(len(test_scores), dtype=bool)
@@ -923,6 +1105,8 @@ def _evaluate_temporal_model(
     if edge_trim_steps < 0:
         raise ValueError("temporal_calibration.edge_trim_steps cannot be negative")
     if edge_trim_steps:
+        covered_calibration[:edge_trim_steps] = False
+        covered_calibration[-edge_trim_steps:] = False
         covered_validation[:edge_trim_steps] = False
         covered_validation[-edge_trim_steps:] = False
         covered_test[:edge_trim_steps] = False
@@ -931,11 +1115,12 @@ def _evaluate_temporal_model(
         temporal_calibration.get("suppress_uncovered_edges", True)
     )
     if suppress_uncovered_edges:
-        nominal_mask = ~validation_frame["is_anomaly"].to_numpy(dtype=bool)
-        reference_mask = covered_validation & nominal_mask
+        nominal_mask = ~calibration_frame["is_anomaly"].to_numpy(dtype=bool)
+        reference_mask = covered_calibration & nominal_mask
         if not reference_mask.any():
-            raise ValueError("no covered nominal validation scores for edge suppression")
-        neutral_score = float(np.median(validation_scores[reference_mask]))
+            raise ValueError("no covered nominal calibration scores for edge suppression")
+        neutral_score = float(np.median(calibration_scores[reference_mask]))
+        calibration_scores[~covered_calibration] = neutral_score
         validation_scores[~covered_validation] = neutral_score
         test_scores[~covered_test] = neutral_score
     score_transform = (
@@ -943,10 +1128,16 @@ def _evaluate_temporal_model(
         if calibration_enabled
         else "none"
     )
-    validation_scores, test_scores, score_calibration = _calibrate_model_scores(
+    (
+        calibration_scores,
+        validation_scores,
+        test_scores,
+        score_calibration,
+    ) = _calibrate_model_scores(
+        calibration_scores=calibration_scores,
         validation_scores=validation_scores,
         test_scores=test_scores,
-        validation_frame=validation_frame,
+        calibration_frame=calibration_frame,
         method=score_transform,
     )
     score_calibration.update(
@@ -955,14 +1146,21 @@ def _evaluate_temporal_model(
             "aggregation": aggregation,
             "suppress_uncovered_edges": suppress_uncovered_edges,
             "edge_trim_steps": edge_trim_steps,
+            "calibration_coverage_ratio": float(np.mean(covered_calibration)),
+            "validation_coverage_ratio": float(np.mean(covered_validation)),
+            "test_coverage_ratio": float(np.mean(covered_test)),
         }
     )
     evaluations = _build_threshold_evaluations(
+        calibration_scores=calibration_scores,
+        calibration_frame=calibration_frame,
+        calibration_events=calibration_events,
         validation_scores=validation_scores,
         validation_frame=validation_frame,
+        validation_events=validation_events,
         test_scores=test_scores,
         test_frame=test_frame,
-        true_events=true_events,
+        test_events=test_events,
         settings=settings,
         score_calibration=score_calibration,
     )
@@ -974,6 +1172,7 @@ def _evaluate_temporal_model(
             model=model,
             aggregation=aggregation,
             train_windows=train_windows,
+            calibration_windows=calibration_windows,
             validation_windows=validation_windows,
             test_windows=test_windows,
             test_window_scores=test_window_scores,
@@ -992,7 +1191,7 @@ def _evaluate_temporal_model(
             channel_errors=test_channel_errors,
             test_values=test_values,
             test_frame=test_frame,
-            true_events=true_events,
+            true_events=test_events,
             channel_names=channel_names,
             subsystem_mapping=subsystem_mapping,
             settings=settings,
@@ -1018,7 +1217,7 @@ def run_synthetic_experiment(
     threshold_selection_strategy: str | None = None,
     temporal_score_transform: str | None = None,
 ) -> dict[str, Any]:
-    """Run one deterministic synthetic experiment and write SAK-v2.3 artefacts."""
+    """Run one deterministic synthetic experiment and write SAK-v2.4 artefacts."""
 
     config_path = config_path.resolve()
     repository_dir = config_path.parent.parent
@@ -1079,6 +1278,7 @@ def run_synthetic_experiment(
     )
 
     synthetic_settings = settings["synthetic"]
+    split_settings = settings["split"]
     dataset = generate_synthetic_telemetry(
         SyntheticConfig(
             periods=int(synthetic_settings["periods"]),
@@ -1087,6 +1287,13 @@ def run_synthetic_experiment(
             orbit_period_steps=int(synthetic_settings["orbit_period_steps"]),
             seed=run_seed,
             missing_fraction=float(synthetic_settings["missing_fraction"]),
+            train_fraction=float(split_settings["train_fraction"]),
+            calibration_fraction=float(split_settings["calibration_fraction"]),
+            validation_fraction=float(split_settings["validation_fraction"]),
+            anomaly_schedule=settings.get("synthetic_anomaly_schedule"),
+            benign_events_per_partition=int(
+                synthetic_settings.get("benign_events_per_partition", 2)
+            ),
         )
     )
     data_output_dir.mkdir(parents=True, exist_ok=True)
@@ -1098,14 +1305,14 @@ def run_synthetic_experiment(
         [event.to_dict() for event in dataset.events],
     )
 
-    split_settings = settings["split"]
-    frames = chronological_split(
+    frames = chronological_calibration_split(
         dataset.frame,
         train_fraction=float(split_settings["train_fraction"]),
+        calibration_fraction=float(split_settings["calibration_fraction"]),
         validation_fraction=float(split_settings["validation_fraction"]),
     )
-    if frames.train["is_anomaly"].any() or frames.validation["is_anomaly"].any():
-        raise RuntimeError("synthetic anomalies leaked into training or validation")
+    if frames.train["is_anomaly"].any():
+        raise RuntimeError("synthetic anomalies leaked into training")
     preprocessor = RobustTelemetryPreprocessor(
         channel_names=dataset.channel_names,
         max_forward_fill_steps=int(
@@ -1113,9 +1320,46 @@ def run_synthetic_experiment(
         ),
     )
     train_values = preprocessor.fit_transform(frames.train)
+    calibration_values = preprocessor.transform(frames.calibration)
     validation_values = preprocessor.transform(frames.validation)
     test_values = preprocessor.transform(frames.test)
     output_dir.mkdir(parents=True, exist_ok=True)
+    partition_map = {
+        "train": frames.train,
+        "calibration": frames.calibration,
+        "validation": frames.validation,
+        "test": frames.test,
+    }
+    write_json(
+        output_dir / "data_quality_report.json",
+        build_data_quality_report(
+            frame=dataset.frame,
+            channel_names=dataset.channel_names,
+            partitions=partition_map,
+            events=dataset.events,
+            channel_groups=dataset.channel_groups or {},
+            strict=True,
+        ),
+    )
+    write_json(
+        output_dir / "split_manifest.json",
+        {
+            "strategy": "train_calibration_validation_test",
+            "partitions": {
+                name: {
+                    "rows": len(partition),
+                    "start": partition.index[0],
+                    "end": partition.index[-1],
+                    "anomaly_rows": int(partition["is_anomaly"].sum()),
+                    "event_count": sum(
+                        event.partition == name for event in dataset.events
+                    ),
+                }
+                for name, partition in partition_map.items()
+            },
+            "test_used_for_selection": False,
+        },
+    )
     write_json(
         output_dir / "preprocessor.json",
         {
@@ -1129,13 +1373,16 @@ def run_synthetic_experiment(
         encoding="utf-8",
     )
 
-    test_start = frames.test.index[0]
-    test_end = frames.test.index[-1]
-    test_events = tuple(
-        event
-        for event in dataset.events
-        if event.start >= test_start and event.end <= test_end
-    )
+    def partition_events(partition: str) -> tuple[Any, ...]:
+        return tuple(
+            event
+            for event in dataset.events
+            if event.partition == partition and event.event_class == "anomaly"
+        )
+
+    calibration_events = partition_events("calibration")
+    validation_events = partition_events("validation")
+    test_events = partition_events("test")
     mapping_path = Path(settings["explainability"]["subsystem_mapping"])
     if not mapping_path.is_absolute():
         mapping_path = repository_dir / mapping_path
@@ -1150,11 +1397,15 @@ def run_synthetic_experiment(
                     explained_variance=float(settings["pca"]["explained_variance"])
                 ),
                 train_values=train_values,
+                calibration_values=calibration_values,
+                calibration_frame=frames.calibration,
+                calibration_events=calibration_events,
                 validation_values=validation_values,
                 validation_frame=frames.validation,
+                validation_events=validation_events,
                 test_values=test_values,
                 test_frame=frames.test,
-                true_events=test_events,
+                test_events=test_events,
                 channel_names=dataset.channel_names,
                 subsystem_mapping=subsystem_mapping,
                 settings=settings,
@@ -1182,11 +1433,15 @@ def run_synthetic_experiment(
                     ),
                 ),
                 train_values=train_values,
+                calibration_values=calibration_values,
+                calibration_frame=frames.calibration,
+                calibration_events=calibration_events,
                 validation_values=validation_values,
                 validation_frame=frames.validation,
+                validation_events=validation_events,
                 test_values=test_values,
                 test_frame=frames.test,
-                true_events=test_events,
+                test_events=test_events,
                 channel_names=dataset.channel_names,
                 subsystem_mapping=subsystem_mapping,
                 settings=settings,
@@ -1222,12 +1477,16 @@ def run_synthetic_experiment(
                     )
                 ),
                 train_values=train_values,
+                calibration_values=calibration_values,
+                calibration_frame=frames.calibration,
+                calibration_events=calibration_events,
                 validation_values=validation_values,
                 validation_frame=frames.validation,
+                validation_events=validation_events,
                 train_frame=frames.train,
                 test_values=test_values,
                 test_frame=frames.test,
-                true_events=test_events,
+                test_events=test_events,
                 channel_names=dataset.channel_names,
                 subsystem_mapping=subsystem_mapping,
                 settings=settings,
@@ -1243,8 +1502,11 @@ def run_synthetic_experiment(
             "rows": len(dataset.frame),
             "channels": len(dataset.channel_names),
             "train_rows": len(frames.train),
+            "calibration_rows": len(frames.calibration),
             "validation_rows": len(frames.validation),
             "test_rows": len(frames.test),
+            "calibration_events": len(calibration_events),
+            "validation_events": len(validation_events),
             "test_events": len(test_events),
         },
         **model_results,
@@ -1256,6 +1518,7 @@ def run_synthetic_experiment(
         dataset_path=dataset_path,
         seed=run_seed,
         train_index=frames.train.index,
+        calibration_index=frames.calibration.index,
         validation_index=frames.validation.index,
         test_index=frames.test.index,
         models=model_variants,

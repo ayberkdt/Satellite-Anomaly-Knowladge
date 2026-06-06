@@ -38,9 +38,15 @@ def comparison_rows(comparison: dict[str, Any]) -> list[dict[str, Any]]:
                 "event_precision": event.get("precision", 0.0),
                 "event_recall": event.get("recall", 0.0),
                 "event_f1": event.get("f1", 0.0),
+                "critical_region_recall": event.get(
+                    "critical_region_recall", 0.0
+                ),
                 "false_alarms_per_day": event.get("false_alarms_per_day", 0.0),
                 "detection_delay_minutes": event.get(
                     "median_detection_delay_minutes"
+                ),
+                "lead_time_to_critical_minutes": event.get(
+                    "median_lead_time_to_critical_minutes"
                 ),
                 "channel_hit_at_1": xai.get("channel_hit_at_1", 0.0),
                 "channel_hit_at_3": xai.get("channel_hit_at_3", 0.0),
@@ -48,6 +54,52 @@ def comparison_rows(comparison: dict[str, Any]) -> list[dict[str, Any]]:
                 "subsystem_hit_at_3": xai.get("subsystem_hit_at_3", 0.0),
             }
         )
+    return rows
+
+
+def operating_point_rows(comparison: dict[str, Any]) -> list[dict[str, Any]]:
+    """Compare fixed quantile and calibration-selected test operating points."""
+
+    rows: list[dict[str, Any]] = []
+    for model_variant, payload in comparison.items():
+        if model_variant == "dataset":
+            continue
+        for operating_point, point_payload in (
+            (
+                "fixed_quantile",
+                payload.get("fixed_quantile_test", {}),
+            ),
+            (
+                "selected",
+                {
+                    "point_metrics": payload.get("point_metrics", {}),
+                    "event_metrics": payload.get("event_metrics", {}),
+                },
+            ),
+        ):
+            point = point_payload.get("point_metrics", {})
+            event = point_payload.get("event_metrics", {})
+            rows.append(
+                {
+                    "model_variant": model_variant,
+                    "operating_point": operating_point,
+                    "event_recall": event.get("recall", 0.0),
+                    "critical_region_recall": event.get(
+                        "critical_region_recall", 0.0
+                    ),
+                    "event_f1": event.get("f1", 0.0),
+                    "false_alarms_per_day": event.get(
+                        "false_alarms_per_day", 0.0
+                    ),
+                    "median_detection_delay_minutes": event.get(
+                        "median_detection_delay_minutes"
+                    ),
+                    "median_lead_time_to_critical_minutes": event.get(
+                        "median_lead_time_to_critical_minutes"
+                    ),
+                    "point_f1": point.get("f1", 0.0),
+                }
+            )
     return rows
 
 
@@ -59,3 +111,7 @@ def write_comparison_artifacts(
 
     write_json(output_dir / "comparison.json", comparison)
     write_csv(output_dir / "comparison.csv", comparison_rows(comparison))
+    write_csv(
+        output_dir / "operating_point_comparison.csv",
+        operating_point_rows(comparison),
+    )
