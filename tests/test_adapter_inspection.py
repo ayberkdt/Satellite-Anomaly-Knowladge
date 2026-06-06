@@ -47,14 +47,29 @@ def test_nasa_adapter_inspects_normalized_telemetry(tmp_path: Path) -> None:
     assert len(dataset.events) == 1
 
 
-def test_nasa_adapter_raw_arrays_are_inspectable_but_not_loaded(tmp_path: Path) -> None:
+def test_nasa_adapter_raw_arrays_load_canonical_dataset(tmp_path: Path) -> None:
+    import numpy as np
+
     (tmp_path / "train").mkdir()
-    (tmp_path / "train" / "A-1.npy").write_bytes(b"placeholder")
+    (tmp_path / "test").mkdir()
+    np.save(tmp_path / "train" / "A-1.npy", np.arange(20, dtype=float).reshape(10, 2))
+    np.save(tmp_path / "test" / "A-1.npy", np.arange(12, dtype=float).reshape(6, 2))
+    pd.DataFrame(
+        {
+            "chan_id": ["A-1"],
+            "spacecraft": ["SMAP"],
+            "anomaly_sequences": ["[[1, 3]]"],
+            "class": ["contextual"],
+        }
+    ).to_csv(tmp_path / "labeled_anomalies.csv", index=False)
 
     adapter = NasaSmapMslAdapter()
     report = adapter.inspect(tmp_path)
+    dataset = adapter.load(tmp_path, channel_id="A-1")
 
     assert report["recognized_layout"] is True
-    assert report["load_supported"] is False
-    with pytest.raises(NotImplementedError, match="raw array loading"):
-        adapter.load(tmp_path)
+    assert report["load_supported"] is True
+    assert report["detected_layout"] == "source_train_test_arrays"
+    assert dataset.channel_names == ("A-1_dim_000", "A-1_dim_001")
+    assert dataset.frame["is_anomaly"].sum() == 2
+    assert dataset.metadata["test_rows_source"] == 6

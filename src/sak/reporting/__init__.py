@@ -1,6 +1,6 @@
 """Engineering report generation."""
 
-from sak.reporting.dashboard import render_synthetic_dashboard
+from sak.reporting.dashboard import render_real_dashboard, render_synthetic_dashboard
 from sak.reporting.markdown import (
     build_early_warning_report_payload,
     render_early_warning_report,
@@ -28,6 +28,7 @@ __all__ = [
     "markdown_table",
     "render_early_warning_report",
     "render_early_warning_report_payload",
+    "render_real_dashboard",
     "render_synthetic_dashboard",
     "subsystem_summary_rows",
     "threshold_sweep_rows",

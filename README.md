@@ -318,9 +318,53 @@ studies. It is not sufficient for real mission performance claims, industrial
 acceptance, proof of universal TCN superiority or learned graph topology.
 
 The adapter API is available under `sak.data.adapters`. NASA SMAP/MSL and
-ESA-ADB adapters currently fail explicitly until source-specific schema
-mapping is implemented. Real performance claims require evaluation through
-one of these or another mission dataset. GNN/GAT remains deferred.
+ESA-ADB adapters fail explicitly on unsupported layouts instead of guessing a
+schema. Real performance claims require evaluation through one of these or
+another mission dataset. GNN/GAT remains deferred.
+
+## SAK-v3.0 Real Dataset Adapter
+
+SAK-v3.0 adds the first real-data benchmark bridge through the NASA SMAP/MSL
+adapter. Synthetic results remain controlled evidence for pipeline behavior;
+they are not mission-performance claims.
+
+The NASA adapter supports:
+
+- normalized staging folders with `telemetry.csv` or `telemetry.parquet`;
+- Telemanom-style `train/*.npy` and `test/*.npy` source-channel arrays;
+- optional `labeled_anomalies.csv` interval mapping into canonical events;
+- JSON inspection through `experiments/inspect_dataset_adapter.py`.
+
+Real-data mode maps every source into the same `TelemetryDataset` contract:
+timestamp index, telemetry channels, `is_anomaly`, `anomaly_event_id`,
+`anomaly_type`, `label_taxonomy`, `operational_mode` and
+`source_channel_id`. If the source has no timestamp, SAK creates a deterministic
+synthetic timestamp index and records `timestamp_synthetic: true`.
+
+The real split policy is leakage-safe. Source train data is split into train,
+calibration and validation; source test stays final held-out test. Test labels
+are never used for threshold selection. If calibration has no labeled anomaly
+events, operating-point metadata reports `no_calibration_events` and falls back
+to nominal false-alarm suppression.
+
+Real-data mode may lack subsystem, orbit and critical-region information.
+Unknown subsystem mappings stay `UNKNOWN`; no EPS/THERMAL/etc. mapping is
+invented. Critical lead-time metrics require source critical/failure
+annotations; otherwise they are reported as proxy/unavailable in metrics and
+the dashboard.
+
+Inspect a dataset:
+
+```powershell
+python experiments/inspect_dataset_adapter.py --adapter nasa_smap_msl --path data/raw/smap_msl
+```
+
+Run a real-data benchmark:
+
+```powershell
+python experiments/run_real_dataset_models.py --adapter nasa_smap_msl --data data/raw/smap_msl --models pca dense_autoencoder
+python experiments/run_real_dataset_models.py --adapter nasa_smap_msl --data data/raw/smap_msl --channel-id P-1 --models pca dense_autoencoder tcn_autoencoder --render-dashboard
+```
 
 ## SAK-v2.5 Dashboard & Critical Early-Warning Metrics
 
@@ -395,3 +439,5 @@ calibration split and data-realism design are documented in
 [Experiment 004](docs/experiment-004-anomalous-calibration-and-data-realism.md).
 Critical early-warning metrics and the dashboard cleanup are documented in
 [Experiment 005](docs/experiment-005-critical-metrics-and-dashboard.md).
+The NASA SMAP/MSL real-data adapter and benchmark protocol are documented in
+[Experiment 006](docs/experiment-006-nasa-smap-msl-adapter.md).

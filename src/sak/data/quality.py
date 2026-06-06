@@ -35,6 +35,7 @@ def build_data_quality_report(
     events: Sequence[Any],
     channel_groups: Mapping[str, Sequence[str]],
     strict: bool = True,
+    dataset_metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Summarize missingness, labels, event coverage and leakage checks."""
 
@@ -44,9 +45,10 @@ def build_data_quality_report(
     if strict and train_has_anomaly:
         raise RuntimeError("train partition contains anomaly labels")
 
-    event_partitions = Counter(str(event.partition) for event in events)
-    event_types = Counter(str(event.anomaly_type) for event in events)
-    event_severity = Counter(str(event.severity) for event in events)
+    metadata = dict(dataset_metadata or {})
+    event_partitions = Counter(str(getattr(event, "partition", "unknown")) for event in events)
+    event_types = Counter(str(getattr(event, "anomaly_type", "unknown")) for event in events)
+    event_severity = Counter(str(getattr(event, "severity", "unknown")) for event in events)
     taxonomy = frame["label_taxonomy"].value_counts()
     total_rows = len(frame)
     anomaly_rows = int(
@@ -73,8 +75,23 @@ def build_data_quality_report(
         )
     )
     return {
+        "source": metadata.get("source", metadata.get("dataset_name", "synthetic")),
+        "source_layout": metadata.get("source_layout", metadata.get("detected_layout", "")),
+        "timestamp_synthetic": bool(metadata.get("timestamp_synthetic", False)),
+        "sample_period_known": not bool(metadata.get("sample_period_unknown", False)),
+        "critical_region_available": bool(
+            metadata.get(
+                "critical_region_available",
+                not bool(metadata.get("critical_region_unavailable", False)),
+            )
+        ),
+        "subsystem_mapping_available": bool(
+            metadata.get("subsystem_mapping_available", True)
+        ),
         "total_rows": total_rows,
         "channel_count": len(channel_names),
+        "event_count": len(events),
+        "anomaly_ratio": float(frame["is_anomaly"].mean()),
         "missing_fraction_per_channel": {
             channel: float(frame[channel].isna().mean())
             for channel in channel_names

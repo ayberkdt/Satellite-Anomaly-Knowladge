@@ -907,3 +907,204 @@ def render_synthetic_dashboard(
     dashboard_path.parent.mkdir(parents=True, exist_ok=True)
     dashboard_path.write_text(html_text, encoding="utf-8")
     return dashboard_path
+
+
+def render_real_dashboard(
+    *,
+    comparison: dict[str, Any],
+    artifact_dir: Path,
+    dashboard_path: Path,
+    dataset_metadata: dict[str, Any] | None = None,
+    split_manifest: dict[str, Any] | None = None,
+) -> Path:
+    """Generate a static HTML dashboard for real-data benchmark runs."""
+
+    dashboard_artifacts = artifact_dir / "dashboard"
+    dashboard_artifacts.mkdir(parents=True, exist_ok=True)
+    dataset = comparison.get("dataset", {})
+    metadata = dataset_metadata or {}
+    split = split_manifest or {}
+    model_keys = [key for key in comparison if key != "dataset"]
+    model_rows = _real_model_rows(comparison)
+    write_csv(dashboard_artifacts / "model_comparison.csv", model_rows)
+    events_by_model = _load_events_themed(artifact_dir, model_keys, warnings=[])
+    event_cards = _event_cards_themed(events_by_model, max_cards=24)
+    limitations = (
+        "Critical-region lead-time metrics are unavailable or proxy unless the "
+        "source dataset provides critical/failure annotations."
+    )
+    critical_available = bool(
+        dataset.get(
+            "critical_region_available",
+            metadata.get("critical_region_available", False),
+        )
+    )
+    partition_rows = [
+        {
+            "partition": name,
+            "rows": values.get("rows", 0),
+            "anomaly_rows": values.get("anomaly_rows", 0),
+            "events": values.get("event_count", 0),
+        }
+        for name, values in split.get("partitions", {}).items()
+    ]
+    html_text = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SAK Real Dataset Dashboard</title>
+  <style>
+    :root {{
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --ink: #172033;
+      --muted: #667085;
+      --line: #d9e1ec;
+      --blue: #235789;
+      --green: #2f6f73;
+      --amber: #f2a541;
+      --unknown: {SUBSYSTEM_COLORS["UNKNOWN"]};
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: Inter, Segoe UI, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }}
+    header {{
+      padding: 28px 36px 24px;
+      color: white;
+      background: #172033;
+      border-bottom: 5px solid var(--green);
+    }}
+    header p {{ max-width: 940px; color: #dbeafe; line-height: 1.5; }}
+    main {{ padding: 24px 36px 44px; }}
+    .grid {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }}
+    .panel, .card {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(23, 32, 51, 0.05);
+    }}
+    .panel {{ padding: 20px; margin: 16px 0; }}
+    .card {{ padding: 16px; }}
+    .card small, .muted {{ color: var(--muted); }}
+    .card strong {{ display: block; font-size: 26px; margin-top: 7px; }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
+    th, td {{ border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; }}
+    th {{ color: var(--muted); font-size: 12px; text-transform: uppercase; }}
+    .banner {{
+      border: 1px solid #F59E0B;
+      background: #FFFBEB;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 16px 0;
+      font-weight: 700;
+    }}
+    .two-col {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }}
+    .event-card {{ padding: 12px 14px; margin: 10px 0; border: 1px solid var(--line); border-radius: 8px; background: #fbfdff; }}
+    .event-card summary {{ cursor: pointer; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }}
+    .subsystem-badge, .risk-badge {{
+      display: inline-block;
+      color: white;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 12px;
+      font-weight: 800;
+    }}
+    .channel-list {{ list-style: none; padding: 0; margin: 8px 0; }}
+    .channel-list li {{ display: grid; grid-template-columns: 92px 1fr 120px 46px; gap: 10px; align-items: center; margin: 8px 0; }}
+    .bar {{ display: block; height: 9px; background: #e5e7eb; border-radius: 999px; overflow: hidden; }}
+    .bar i {{ display: block; height: 100%; border-radius: 999px; }}
+    @media (max-width: 960px) {{
+      main, header {{ padding-left: 18px; padding-right: 18px; }}
+      .grid, .two-col {{ grid-template-columns: 1fr; }}
+    }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SAK-v3.0 Real Dataset Benchmark</h1>
+    <p>NASA SMAP/MSL real-data adapter output. Test labels are held out for final
+    evaluation and are never used for threshold selection.</p>
+  </header>
+  <main>
+    <div class="banner">{html.escape(limitations)}</div>
+    <div class="grid">
+      {_metric_card("Source", str(dataset.get("source", "nasa_smap_msl")), "real telemetry")}
+      {_metric_card("Channel ID", str(dataset.get("channel_id", "all")), "source channel")}
+      {_metric_card("Rows", f"{int(dataset.get('rows', 0)):,}", "canonical samples")}
+      {_metric_card("Critical Region", "available" if critical_available else "not available / proxy", "lead-time status")}
+    </div>
+    <div class="panel">
+      <h2>Dataset Summary</h2>
+      <p><b>Layout:</b> {html.escape(str(dataset.get("source_layout", metadata.get("source_layout", ""))))}
+      &nbsp; <b>Channels:</b> {html.escape(str(dataset.get("channels", 0)))}
+      &nbsp; <b>Events:</b> {html.escape(str(dataset.get("events", 0)))}
+      &nbsp; <b>Timestamp synthetic:</b> {html.escape(str(dataset.get("timestamp_synthetic", metadata.get("timestamp_synthetic", False))))}
+      &nbsp; <b>Subsystem fallback:</b> {_subsystem_badge("UNKNOWN")}</p>
+      {_html_table(partition_rows)}
+    </div>
+    <div class="panel">
+      <h2>Model Comparison</h2>
+      {_html_table(model_rows)}
+    </div>
+    <div class="two-col">
+      <div class="panel">
+        <h2>Metric Availability</h2>
+        <table><tbody>
+          <tr><th>Available</th><td>Point precision/recall/F1, event precision/recall/F1, false alarms/day, detection delay, reconstruction channel ranking.</td></tr>
+          <tr><th>Proxy</th><td>Critical-region recall and lead-time fields when source critical/failure annotations are absent.</td></tr>
+          <tr><th>Unavailable</th><td>Subsystem hit metrics unless a trusted source-channel mapping is provided.</td></tr>
+        </tbody></table>
+      </div>
+      <div class="panel">
+        <h2>Leakage Guard</h2>
+        <p>Selection partition: calibration. Test used for selection:
+        <b>{html.escape(str(dataset.get("test_used_for_selection", False)))}</b>.</p>
+        <p class="muted">If calibration contains no labeled anomaly events, operating
+        point metadata reports <code>no_calibration_events</code> and falls back to
+        nominal false-alarm suppression.</p>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Real Event Timeline</h2>
+      <p class="muted">Cards show predicted alarm intervals, source event IDs when
+      matched, false positives, and UNKNOWN subsystem fallback where no mapping exists.</p>
+      {event_cards}
+    </div>
+  </main>
+</body>
+</html>
+"""
+    dashboard_path.parent.mkdir(parents=True, exist_ok=True)
+    dashboard_path.write_text(html_text, encoding="utf-8")
+    return dashboard_path
+
+
+def _real_model_rows(comparison: dict[str, Any]) -> list[dict[str, str | float]]:
+    rows: list[dict[str, str | float]] = []
+    for model_key, payload in comparison.items():
+        if model_key == "dataset":
+            continue
+        event = payload.get("event_metrics", {})
+        point = payload.get("point_metrics", {})
+        xai = payload.get("xai_metrics", {})
+        rows.append(
+            {
+                "model": model_label(model_key),
+                "event_recall": event.get("recall", 0.0),
+                "event_f1": event.get("f1", 0.0),
+                "false_alarms_per_day": event.get("false_alarms_per_day", 0.0) or 0.0,
+                "detection_delay_min": event.get("median_detection_delay_minutes", 0.0)
+                or 0.0,
+                "point_f1": point.get("f1", 0.0),
+                "channel_hit_at_3": xai.get("channel_hit_at_3", 0.0),
+                "critical_region_status": str(
+                    event.get("critical_region_metric_status", "proxy")
+                ),
+            }
+        )
+    return rows

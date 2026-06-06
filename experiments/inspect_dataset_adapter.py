@@ -1,12 +1,20 @@
-"""Inspect external telemetry dataset adapter readiness."""
+"""Inspect external telemetry dataset adapter readiness as JSON."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
+from typing import Any
 
-from sak.data import AdapterDataNotFoundError, NasaSmapMslAdapter
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+SOURCE_ROOT = REPOSITORY_ROOT / "src"
+if str(SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SOURCE_ROOT))
+
+from sak.data import AdapterDataNotFoundError, NasaSmapMslAdapter  # noqa: E402
+from sak.experiments.artifacts import write_json  # noqa: E402
 
 
 def _adapter(name: str) -> object:
@@ -23,49 +31,47 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="Dataset adapter to inspect.",
     )
+    parser.add_argument("--path", type=Path, required=True, help="Dataset root path.")
     parser.add_argument(
-        "--path",
+        "--output",
         type=Path,
-        required=True,
-        help="Dataset root path.",
-    )
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Emit machine-readable JSON.",
+        help="Optional path for adapter_inspection.json.",
     )
     return parser.parse_args()
+
+
+def _missing_payload(adapter_name: str, path: Path, error: Exception) -> dict[str, Any]:
+    return {
+        "source": adapter_name,
+        "adapter": adapter_name,
+        "path": str(path),
+        "exists": False,
+        "supported": False,
+        "recognized_layout": False,
+        "load_supported": False,
+        "detected_layout": "missing",
+        "channel_count": 0,
+        "has_train_data": False,
+        "has_test_data": False,
+        "has_labels": False,
+        "has_anomaly_intervals": False,
+        "warnings": [],
+        "errors": [str(error)],
+        "notes": "Dataset path is missing; no telemetry was inspected.",
+    }
 
 
 def main() -> None:
     arguments = parse_args()
     adapter = _adapter(arguments.adapter)
     try:
-        report = adapter.inspect(arguments.path)  # type: ignore[attr-defined]
+        inspection = adapter.inspect(arguments.path)  # type: ignore[attr-defined]
+        payload = inspection.to_dict()
     except AdapterDataNotFoundError as error:
-        report = {
-            "adapter": arguments.adapter,
-            "path": str(arguments.path),
-            "exists": False,
-            "recognized_layout": False,
-            "load_supported": False,
-            "channel_count": None,
-            "labels_available": False,
-            "event_count": None,
-            "error": str(error),
-            "notes": "Dataset path is missing; no telemetry was inspected.",
-        }
-    if arguments.json:
-        print(json.dumps(report, indent=2))
-        return
-    print(f"Adapter: {report['adapter']}")
-    print(f"Path: {report['path']}")
-    print(f"Recognized layout: {report['recognized_layout']}")
-    print(f"Load supported: {report['load_supported']}")
-    print(f"Channel count: {report['channel_count']}")
-    print(f"Labels available: {report['labels_available']}")
-    print(f"Event count: {report['event_count']}")
-    print(f"Notes: {report['notes']}")
+        payload = _missing_payload(arguments.adapter, arguments.path, error)
+    print(json.dumps(payload, indent=2))
+    if arguments.output is not None:
+        write_json(arguments.output, payload)
 
 
 if __name__ == "__main__":
