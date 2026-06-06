@@ -1,0 +1,67 @@
+project:
+  name: SAK
+  seed: 42
+  timezone: UTC
+
+data:
+  source: synthetic
+  path: data/synthetic/telemetry.parquet
+  timestamp_column: timestamp
+  label_column: is_anomaly
+  context_columns:
+    - operational_mode
+    - eclipse
+    - orbit_phase
+  sampling_frequency: 1min
+
+split:
+  strategy: chronological
+  train_fraction: 0.60
+  validation_fraction: 0.20
+  test_fraction: 0.20
+  train_nominal_only: true
+
+preprocessing:
+  resample_aggregation: median
+  interpolation:
+    method: time
+    max_gap_steps: 5
+  scaler: robust
+  fit_on: train
+
+windowing:
+  length: 60
+  stride: 5
+  prediction_horizon: 0
+
+model:
+  family: pca
+  parameters:
+    explained_variance: 0.95
+
+scoring:
+  aggregation: mean_squared_error
+  calibration_set: validation
+  threshold:
+    method: quantile
+    quantile: 0.995
+
+early_warning:
+  smoothing:
+    method: ewma
+    alpha: 0.20
+  persistence:
+    minimum_hits: 3
+    lookback_steps: 5
+  cooldown_steps: 10
+
+explainability:
+  top_k_channels: 5
+  channel_attribution: reconstruction_error
+  subsystem_mapping: configs/subsystems.yaml
+
+evaluation:
+  event_overlap_tolerance_steps: 5
+  report_point_metrics: true
+  report_event_metrics: true
+

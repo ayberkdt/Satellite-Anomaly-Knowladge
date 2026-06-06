@@ -1,0 +1,45 @@
+project:
+  seed: 42
+
+synthetic:
+  periods: 20160
+  frequency: 1min
+  start: 2026-01-01T00:00:00Z
+  orbit_period_steps: 96
+  missing_fraction: 0.001
+
+split:
+  train_fraction: 0.60
+  validation_fraction: 0.20
+
+preprocessing:
+  max_forward_fill_steps: 5
+
+pca:
+  explained_variance: 0.95
+
+autoencoder:
+  hidden_dim: 24
+  latent_dim: 6
+  epochs: 35
+  batch_size: 256
+  learning_rate: 0.001
+  weight_decay: 0.00001
+  patience: 6
+
+early_warning:
+  ewma_alpha: 0.20
+  threshold_quantile: 0.995
+  mode_context_column: operational_mode
+  mode_minimum_samples: 10
+  threshold_sweep_quantiles:
+    - 0.99
+    - 0.995
+    - 0.999
+  minimum_hits: 3
+  lookback_steps: 5
+  merge_gap_steps: 10
+
+explainability:
+  top_k_channels: 5
+  subsystem_mapping: configs/subsystems.yaml

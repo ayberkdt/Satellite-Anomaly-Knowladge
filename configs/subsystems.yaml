@@ -1,0 +1,36 @@
+subsystems:
+  EPS:
+    display_name: Electrical Power System
+    channels:
+      - battery_voltage
+      - battery_current
+      - battery_temperature
+      - battery_state_of_charge
+      - solar_array_voltage
+      - solar_array_current
+      - bus_voltage
+  THERMAL:
+    display_name: Thermal Control
+    channels:
+      - panel_temperature
+      - payload_temperature
+  AOCS:
+    display_name: Attitude and Orbit Control System
+    channels:
+      - angular_rate_x
+      - angular_rate_y
+      - angular_rate_z
+      - reaction_wheel_speed
+      - sun_sensor_angle
+  COMM:
+    display_name: Communications
+    channels:
+      - transmitter_power
+      - receiver_rssi
+      - link_margin
+  PAYLOAD:
+    display_name: Payload
+    channels:
+      - payload_current
+      - payload_temperature
+      - payload_status
