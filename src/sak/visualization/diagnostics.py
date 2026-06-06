@@ -19,7 +19,7 @@ def plot_score_timeline(
     timestamps: pd.DatetimeIndex,
     raw_scores: np.ndarray,
     smoothed_scores: np.ndarray,
-    threshold: float,
+    threshold: float | np.ndarray,
     labels: np.ndarray,
     events: Sequence[DetectedEvent],
     output_path: Path,
@@ -37,7 +37,27 @@ def plot_score_timeline(
         linewidth=1.2,
         label="EWMA score",
     )
-    axis.axhline(threshold, color="#d1495b", linestyle="--", label="Threshold")
+    threshold_values = np.asarray(threshold, dtype=float)
+    if threshold_values.ndim == 0:
+        axis.axhline(
+            float(threshold_values),
+            color="#d1495b",
+            linestyle="--",
+            label="Threshold",
+        )
+        scale_threshold = float(threshold_values)
+    elif threshold_values.shape == raw_scores.shape:
+        axis.plot(
+            timestamps,
+            threshold_values,
+            color="#d1495b",
+            linestyle="--",
+            linewidth=1.0,
+            label="Threshold",
+        )
+        scale_threshold = float(np.nanmedian(threshold_values))
+    else:
+        raise ValueError("threshold must be scalar or aligned with raw_scores")
 
     label_indices = np.flatnonzero(labels)
     if len(label_indices):
@@ -55,7 +75,7 @@ def plot_score_timeline(
     axis.set_title(title)
     axis.set_ylabel("Anomaly score")
     axis.set_xlabel("Time")
-    axis.set_yscale("symlog", linthresh=max(threshold / 2.0, 1e-6))
+    axis.set_yscale("symlog", linthresh=max(scale_threshold / 2.0, 1e-6))
     axis.legend(loc="upper left")
     axis.grid(alpha=0.2)
     figure.tight_layout()

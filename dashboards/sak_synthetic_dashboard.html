@@ -95,18 +95,18 @@
         <div class="card"><small>Rows</small><strong>20,160</strong><em>synthetic telemetry</em></div>
         <div class="card"><small>Telemetry channels</small><strong>13</strong><em>scaled train-only</em></div>
         <div class="card"><small>Test events</small><strong>10</strong><em>controlled injections</em></div>
-        <div class="card"><small>Best XAI Hit@3</small><strong>dense_autoencoder_global</strong><em>top channel attribution</em></div>
+        <div class="card"><small>Best XAI Hit@3</small><strong>Dense Autoencoder / Global</strong><em>top channel attribution</em></div>
       </div>
       <div class="panel">
         <h2>Executive Readout</h2>
-        <p><b>Best event F1:</b> pca_global
+        <p><b>Best event F1:</b> PCA / Global
         (0.952). <b>Lowest false alarm rate:</b>
-        pca_global
+        PCA / Global
         (0.357/day).</p>
         
 <ul class="takeaways">
-  <li><b>Channel explanation hit rate:</b> 0.000 across model-event matches.</li>
-  <li><b>False-positive operational modes:</b> none.</li>
+  <li><b>Channel explanation hit rate:</b> 0.950 across model-event matches.</li>
+  <li><b>False-positive operational modes:</b> nominal, payload.</li>
   <li><b>Reading tip:</b> green delay bars mean the expected injected channel appeared in the model's top-3 explanation.</li>
 </ul>
 
@@ -120,22 +120,22 @@
     </section>
 
     <section id="models" class="section">
-      <div class="panel"><h2>Model Metrics</h2><table><thead><tr><th>model</th><th>event_precision</th><th>event_recall</th><th>event_f1</th><th>false_alarms_per_day</th><th>median_delay_min</th><th>point_f1</th><th>channel_hit_at_3</th><th>subsystem_hit_at_2</th><th>critical_window_hit_rate</th></tr></thead><tbody><tr><td>pca_global</td><td>0.909</td><td>1.000</td><td>0.952</td><td>0.357</td><td>13.500</td><td>0.655</td><td>0.900</td><td>0.900</td><td>0.900</td></tr><tr><td>pca_mode_aware</td><td>0.833</td><td>1.000</td><td>0.909</td><td>0.714</td><td>13.000</td><td>0.655</td><td>0.900</td><td>0.900</td><td>0.900</td></tr><tr><td>dense_autoencoder_global</td><td>0.909</td><td>1.000</td><td>0.952</td><td>0.357</td><td>13.500</td><td>0.714</td><td>1.000</td><td>1.000</td><td>1.000</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>0.769</td><td>1.000</td><td>0.870</td><td>1.071</td><td>13.500</td><td>0.714</td><td>1.000</td><td>1.000</td><td>1.000</td></tr></tbody></table></div>
-      <div class="panel"><h2>Threshold Sweep</h2><img src="../artifacts/synthetic_models/dashboard/threshold_sweep.png" alt="Threshold sweep chart"><table><thead><tr><th>model</th><th>quantile</th><th>threshold</th><th>event_precision</th><th>event_recall</th><th>event_f1</th><th>false_alarms_per_day</th><th>median_delay_min</th></tr></thead><tbody><tr><td>pca_global</td><td>0.990</td><td>0.059</td><td>0.833</td><td>1.000</td><td>0.909</td><td>0.714</td><td>13.000</td></tr><tr><td>pca_global</td><td>0.995</td><td>0.063</td><td>0.909</td><td>1.000</td><td>0.952</td><td>0.357</td><td>13.500</td></tr><tr><td>pca_global</td><td>0.999</td><td>0.067</td><td>1.000</td><td>1.000</td><td>1.000</td><td>0.000</td><td>13.500</td></tr><tr><td>pca_mode_aware</td><td>0.990</td><td>0.059</td><td>0.833</td><td>1.000</td><td>0.909</td><td>0.714</td><td>13.000</td></tr><tr><td>pca_mode_aware</td><td>0.995</td><td>0.063</td><td>0.833</td><td>1.000</td><td>0.909</td><td>0.714</td><td>13.000</td></tr><tr><td>pca_mode_aware</td><td>0.999</td><td>0.067</td><td>1.000</td><td>1.000</td><td>1.000</td><td>0.000</td><td>13.500</td></tr><tr><td>dense_autoencoder_global</td><td>0.990</td><td>0.053</td><td>0.769</td><td>1.000</td><td>0.870</td><td>1.071</td><td>13.500</td></tr><tr><td>dense_autoencoder_global</td><td>0.995</td><td>0.057</td><td>0.909</td><td>1.000</td><td>0.952</td><td>0.357</td><td>13.500</td></tr><tr><td>dense_autoencoder_global</td><td>0.999</td><td>0.065</td><td>0.909</td><td>1.000</td><td>0.952</td><td>0.357</td><td>14.000</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>0.990</td><td>0.053</td><td>0.714</td><td>1.000</td><td>0.833</td><td>1.429</td><td>13.500</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>0.995</td><td>0.057</td><td>0.769</td><td>1.000</td><td>0.870</td><td>1.071</td><td>13.500</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>0.999</td><td>0.065</td><td>0.833</td><td>1.000</td><td>0.909</td><td>0.714</td><td>14.000</td></tr></tbody></table></div>
-      <div class="panel"><h2>Detection Delays</h2><img src="../artifacts/synthetic_models/dashboard/detection_delays.png" alt="Detection delay chart"><table><thead><tr><th>model</th><th>true_event_id</th><th>predicted_event_id</th><th>detection_delay_min</th></tr></thead><tbody><tr><td>pca_global</td><td>SYN-0001</td><td>SAK-0001</td><td>2.000</td></tr><tr><td>pca_global</td><td>SYN-0002</td><td>SAK-0002</td><td>51.000</td></tr><tr><td>pca_global</td><td>SYN-0003</td><td>SAK-0003</td><td>2.000</td></tr><tr><td>pca_global</td><td>SYN-0004</td><td>SAK-0004</td><td>80.000</td></tr><tr><td>pca_global</td><td>SYN-0005</td><td>SAK-0005</td><td>48.000</td></tr><tr><td>pca_global</td><td>SYN-0006</td><td>SAK-0006</td><td>-13.000</td></tr><tr><td>pca_global</td><td>SYN-0007</td><td>SAK-0007</td><td>2.000</td></tr><tr><td>pca_global</td><td>SYN-0008</td><td>SAK-0008</td><td>56.000</td></tr><tr><td>pca_global</td><td>SYN-0009</td><td>SAK-0009</td><td>2.000</td></tr><tr><td>pca_global</td><td>SYN-0010</td><td>SAK-0011</td><td>25.000</td></tr><tr><td>pca_mode_aware</td><td>SYN-0001</td><td>SAK-0001</td><td>2.000</td></tr><tr><td>pca_mode_aware</td><td>SYN-0002</td><td>SAK-0003</td><td>51.000</td></tr><tr><td>pca_mode_aware</td><td>SYN-0003</td><td>SAK-0004</td><td>2.000</td></tr><tr><td>pca_mode_aware</td><td>SYN-0004</td><td>SAK-0005</td><td>80.000</td></tr><tr><td>pca_mode_aware</td><td>SYN-0005</td><td>SAK-0006</td><td>48.000</td></tr><tr><td>pca_mode_aware</td><td>SYN-0006</td><td>SAK-0007</td><td>-13.000</td></tr><tr><td>pca_mode_aware</td><td>SYN-0007</td><td>SAK-0008</td><td>2.000</td></tr><tr><td>pca_mode_aware</td><td>SYN-0008</td><td>SAK-0009</td><td>56.000</td></tr><tr><td>pca_mode_aware</td><td>SYN-0009</td><td>SAK-0010</td><td>2.000</td></tr><tr><td>pca_mode_aware</td><td>SYN-0010</td><td>SAK-0012</td><td>24.000</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0001</td><td>SAK-0001</td><td>2.000</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0002</td><td>SAK-0002</td><td>53.000</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0003</td><td>SAK-0003</td><td>2.000</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0004</td><td>SAK-0004</td><td>98.000</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0005</td><td>SAK-0005</td><td>46.000</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0006</td><td>SAK-0006</td><td>-13.000</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0007</td><td>SAK-0007</td><td>2.000</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0008</td><td>SAK-0008</td><td>56.000</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0009</td><td>SAK-0009</td><td>2.000</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0010</td><td>SAK-0011</td><td>25.000</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0001</td><td>SAK-0001</td><td>2.000</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0002</td><td>SAK-0003</td><td>51.000</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0003</td><td>SAK-0004</td><td>2.000</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0004</td><td>SAK-0005</td><td>97.000</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0005</td><td>SAK-0006</td><td>48.000</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0006</td><td>SAK-0007</td><td>-13.000</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0007</td><td>SAK-0008</td><td>2.000</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0008</td><td>SAK-0009</td><td>56.000</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0009</td><td>SAK-0010</td><td>2.000</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0010</td><td>SAK-0012</td><td>25.000</td></tr></tbody></table></div>
+      <div class="panel"><h2>Model Metrics</h2><table><thead><tr><th>model</th><th>event_precision</th><th>event_recall</th><th>event_f1</th><th>false_alarms_per_day</th><th>median_delay_min</th><th>point_f1</th><th>channel_hit_at_3</th><th>subsystem_hit_at_2</th><th>critical_window_hit_rate</th></tr></thead><tbody><tr><td>PCA / Global</td><td>0.909</td><td>1.000</td><td>0.952</td><td>0.357</td><td>13.500</td><td>0.655</td><td>0.900</td><td>0.900</td><td>0.900</td></tr><tr><td>PCA / Mode-Aware</td><td>0.833</td><td>1.000</td><td>0.909</td><td>0.714</td><td>13.000</td><td>0.655</td><td>0.900</td><td>0.900</td><td>0.900</td></tr><tr><td>Dense Autoencoder / Global</td><td>0.909</td><td>1.000</td><td>0.952</td><td>0.357</td><td>13.500</td><td>0.714</td><td>1.000</td><td>1.000</td><td>1.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>0.769</td><td>1.000</td><td>0.870</td><td>1.071</td><td>13.500</td><td>0.714</td><td>1.000</td><td>1.000</td><td>1.000</td></tr></tbody></table></div>
+      <div class="panel"><h2>Threshold Sweep</h2><img src="../artifacts/synthetic_models/dashboard/threshold_sweep.png" alt="Threshold sweep chart"><table><thead><tr><th>model</th><th>quantile</th><th>threshold</th><th>event_precision</th><th>event_recall</th><th>event_f1</th><th>false_alarms_per_day</th><th>median_delay_min</th></tr></thead><tbody><tr><td>PCA / Global</td><td>0.990</td><td>0.059</td><td>0.833</td><td>1.000</td><td>0.909</td><td>0.714</td><td>13.000</td></tr><tr><td>PCA / Global</td><td>0.995</td><td>0.063</td><td>0.909</td><td>1.000</td><td>0.952</td><td>0.357</td><td>13.500</td></tr><tr><td>PCA / Global</td><td>0.999</td><td>0.067</td><td>1.000</td><td>1.000</td><td>1.000</td><td>0.000</td><td>13.500</td></tr><tr><td>PCA / Mode-Aware</td><td>0.990</td><td>0.059</td><td>0.833</td><td>1.000</td><td>0.909</td><td>0.714</td><td>13.000</td></tr><tr><td>PCA / Mode-Aware</td><td>0.995</td><td>0.063</td><td>0.833</td><td>1.000</td><td>0.909</td><td>0.714</td><td>13.000</td></tr><tr><td>PCA / Mode-Aware</td><td>0.999</td><td>0.067</td><td>1.000</td><td>1.000</td><td>1.000</td><td>0.000</td><td>13.500</td></tr><tr><td>Dense Autoencoder / Global</td><td>0.990</td><td>0.053</td><td>0.769</td><td>1.000</td><td>0.870</td><td>1.071</td><td>13.500</td></tr><tr><td>Dense Autoencoder / Global</td><td>0.995</td><td>0.057</td><td>0.909</td><td>1.000</td><td>0.952</td><td>0.357</td><td>13.500</td></tr><tr><td>Dense Autoencoder / Global</td><td>0.999</td><td>0.065</td><td>0.909</td><td>1.000</td><td>0.952</td><td>0.357</td><td>14.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>0.990</td><td>0.053</td><td>0.714</td><td>1.000</td><td>0.833</td><td>1.429</td><td>13.500</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>0.995</td><td>0.057</td><td>0.769</td><td>1.000</td><td>0.870</td><td>1.071</td><td>13.500</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>0.999</td><td>0.065</td><td>0.833</td><td>1.000</td><td>0.909</td><td>0.714</td><td>14.000</td></tr></tbody></table></div>
+      <div class="panel"><h2>Detection Delays</h2><img src="../artifacts/synthetic_models/dashboard/detection_delays.png" alt="Detection delay chart"><table><thead><tr><th>model</th><th>true_event_id</th><th>predicted_event_id</th><th>detection_delay_min</th></tr></thead><tbody><tr><td>PCA / Global</td><td>SYN-0001</td><td>SAK-0001</td><td>2.000</td></tr><tr><td>PCA / Global</td><td>SYN-0002</td><td>SAK-0002</td><td>51.000</td></tr><tr><td>PCA / Global</td><td>SYN-0003</td><td>SAK-0003</td><td>2.000</td></tr><tr><td>PCA / Global</td><td>SYN-0004</td><td>SAK-0004</td><td>80.000</td></tr><tr><td>PCA / Global</td><td>SYN-0005</td><td>SAK-0005</td><td>48.000</td></tr><tr><td>PCA / Global</td><td>SYN-0006</td><td>SAK-0006</td><td>-13.000</td></tr><tr><td>PCA / Global</td><td>SYN-0007</td><td>SAK-0007</td><td>2.000</td></tr><tr><td>PCA / Global</td><td>SYN-0008</td><td>SAK-0008</td><td>56.000</td></tr><tr><td>PCA / Global</td><td>SYN-0009</td><td>SAK-0009</td><td>2.000</td></tr><tr><td>PCA / Global</td><td>SYN-0010</td><td>SAK-0011</td><td>25.000</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0001</td><td>SAK-0001</td><td>2.000</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0002</td><td>SAK-0003</td><td>51.000</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0003</td><td>SAK-0004</td><td>2.000</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0004</td><td>SAK-0005</td><td>80.000</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0005</td><td>SAK-0006</td><td>48.000</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0006</td><td>SAK-0007</td><td>-13.000</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0007</td><td>SAK-0008</td><td>2.000</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0008</td><td>SAK-0009</td><td>56.000</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0009</td><td>SAK-0010</td><td>2.000</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0010</td><td>SAK-0012</td><td>24.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0001</td><td>SAK-0001</td><td>2.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0002</td><td>SAK-0002</td><td>53.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0003</td><td>SAK-0003</td><td>2.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0004</td><td>SAK-0004</td><td>98.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0005</td><td>SAK-0005</td><td>46.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0006</td><td>SAK-0006</td><td>-13.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0007</td><td>SAK-0007</td><td>2.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0008</td><td>SAK-0008</td><td>56.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0009</td><td>SAK-0009</td><td>2.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0010</td><td>SAK-0011</td><td>25.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0001</td><td>SAK-0001</td><td>2.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0002</td><td>SAK-0003</td><td>51.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0003</td><td>SAK-0004</td><td>2.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0004</td><td>SAK-0005</td><td>97.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0005</td><td>SAK-0006</td><td>48.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0006</td><td>SAK-0007</td><td>-13.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0007</td><td>SAK-0008</td><td>2.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0008</td><td>SAK-0009</td><td>56.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0009</td><td>SAK-0010</td><td>2.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0010</td><td>SAK-0012</td><td>25.000</td></tr></tbody></table></div>
     </section>
 
     <section id="events" class="section">
       <div class="two-col">
-        <div class="panel"><h2>PCA Score Timeline</h2><img src="../artifacts/synthetic_models/pca/score_timeline.png" alt="PCA score timeline"></div>
-        <div class="panel"><h2>Autoencoder Heatmap</h2><img src="../artifacts/synthetic_models/dense_autoencoder/channel_error_heatmap.png" alt="Autoencoder channel heatmap"></div>
+        <div class="panel"><h2>PCA Score Timeline</h2><img src="../artifacts/synthetic_models/pca_global/plots/score_timeline.png" alt="PCA score timeline"></div>
+        <div class="panel"><h2>Autoencoder Heatmap</h2><img src="../artifacts/synthetic_models/dense_autoencoder_global/plots/channel_error_heatmap.png" alt="Autoencoder channel heatmap"></div>
       </div>
-      <div class="panel"><h2>Event Diagnostics</h2><img src="../artifacts/synthetic_models/dashboard/event_diagnostics.png" alt="Event diagnostics chart"><table><thead><tr><th>model</th><th>true_event_id</th><th>anomaly_type</th><th>expected_subsystem</th><th>predicted_event_id</th><th>detection_delay_min</th><th>top_channels</th><th>top_subsystems</th><th>channel_hit</th><th>subsystem_hit</th></tr></thead><tbody><tr><td>pca_global</td><td>SYN-0001</td><td>spike</td><td>EPS</td><td>SAK-0001</td><td>2.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_global</td><td>SYN-0002</td><td>drift</td><td>EPS</td><td>SAK-0002</td><td>51.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_global</td><td>SYN-0003</td><td>step_change</td><td>COMM</td><td>SAK-0003</td><td>2.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_global</td><td>SYN-0004</td><td>slow_degradation</td><td>EPS</td><td>SAK-0004</td><td>80.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_global</td><td>SYN-0005</td><td>stuck_sensor</td><td>EPS</td><td>SAK-0005</td><td>48.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_global</td><td>SYN-0006</td><td>noise_increase</td><td>AOCS</td><td>SAK-0006</td><td>-13.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_global</td><td>SYN-0007</td><td>correlation_break</td><td>EPS</td><td>SAK-0007</td><td>2.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_global</td><td>SYN-0008</td><td>thermal_runaway</td><td>THERMAL</td><td>SAK-0008</td><td>56.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_global</td><td>SYN-0009</td><td>voltage_drop_current_rise</td><td>EPS</td><td>SAK-0009</td><td>2.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_global</td><td>SYN-0010</td><td>orbit_dependent_thermal</td><td>THERMAL</td><td>SAK-0011</td><td>25.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_mode_aware</td><td>SYN-0001</td><td>spike</td><td>EPS</td><td>SAK-0001</td><td>2.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_mode_aware</td><td>SYN-0002</td><td>drift</td><td>EPS</td><td>SAK-0003</td><td>51.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_mode_aware</td><td>SYN-0003</td><td>step_change</td><td>COMM</td><td>SAK-0004</td><td>2.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_mode_aware</td><td>SYN-0004</td><td>slow_degradation</td><td>EPS</td><td>SAK-0005</td><td>80.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_mode_aware</td><td>SYN-0005</td><td>stuck_sensor</td><td>EPS</td><td>SAK-0006</td><td>48.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_mode_aware</td><td>SYN-0006</td><td>noise_increase</td><td>AOCS</td><td>SAK-0007</td><td>-13.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_mode_aware</td><td>SYN-0007</td><td>correlation_break</td><td>EPS</td><td>SAK-0008</td><td>2.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_mode_aware</td><td>SYN-0008</td><td>thermal_runaway</td><td>THERMAL</td><td>SAK-0009</td><td>56.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_mode_aware</td><td>SYN-0009</td><td>voltage_drop_current_rise</td><td>EPS</td><td>SAK-0010</td><td>2.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>pca_mode_aware</td><td>SYN-0010</td><td>orbit_dependent_thermal</td><td>THERMAL</td><td>SAK-0012</td><td>24.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0001</td><td>spike</td><td>EPS</td><td>SAK-0001</td><td>2.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0002</td><td>drift</td><td>EPS</td><td>SAK-0002</td><td>53.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0003</td><td>step_change</td><td>COMM</td><td>SAK-0003</td><td>2.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0004</td><td>slow_degradation</td><td>EPS</td><td>SAK-0004</td><td>98.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0005</td><td>stuck_sensor</td><td>EPS</td><td>SAK-0005</td><td>46.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0006</td><td>noise_increase</td><td>AOCS</td><td>SAK-0006</td><td>-13.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0007</td><td>correlation_break</td><td>EPS</td><td>SAK-0007</td><td>2.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0008</td><td>thermal_runaway</td><td>THERMAL</td><td>SAK-0008</td><td>56.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0009</td><td>voltage_drop_current_rise</td><td>EPS</td><td>SAK-0009</td><td>2.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_global</td><td>SYN-0010</td><td>orbit_dependent_thermal</td><td>THERMAL</td><td>SAK-0011</td><td>25.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0001</td><td>spike</td><td>EPS</td><td>SAK-0001</td><td>2.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0002</td><td>drift</td><td>EPS</td><td>SAK-0003</td><td>51.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0003</td><td>step_change</td><td>COMM</td><td>SAK-0004</td><td>2.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0004</td><td>slow_degradation</td><td>EPS</td><td>SAK-0005</td><td>97.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0005</td><td>stuck_sensor</td><td>EPS</td><td>SAK-0006</td><td>48.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0006</td><td>noise_increase</td><td>AOCS</td><td>SAK-0007</td><td>-13.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0007</td><td>correlation_break</td><td>EPS</td><td>SAK-0008</td><td>2.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0008</td><td>thermal_runaway</td><td>THERMAL</td><td>SAK-0009</td><td>56.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0009</td><td>voltage_drop_current_rise</td><td>EPS</td><td>SAK-0010</td><td>2.000</td><td></td><td></td><td>no</td><td>no</td></tr><tr><td>dense_autoencoder_mode_aware</td><td>SYN-0010</td><td>orbit_dependent_thermal</td><td>THERMAL</td><td>SAK-0012</td><td>25.000</td><td></td><td></td><td>no</td><td>no</td></tr></tbody></table></div>
-      <div class="panel"><h2>Predicted Events</h2><h3>PCA Events</h3>
+      <div class="panel"><h2>Event Diagnostics</h2><img src="../artifacts/synthetic_models/dashboard/event_diagnostics.png" alt="Event diagnostics chart"><table><thead><tr><th>model</th><th>true_event_id</th><th>anomaly_type</th><th>expected_subsystem</th><th>predicted_event_id</th><th>detection_delay_min</th><th>top_channels</th><th>top_subsystems</th><th>channel_hit</th><th>subsystem_hit</th></tr></thead><tbody><tr><td>PCA / Global</td><td>SYN-0001</td><td>spike</td><td>EPS</td><td>SAK-0001</td><td>2.000</td><td>bus_voltage, battery_voltage, reaction_wheel_speed</td><td>EPS, AOCS</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Global</td><td>SYN-0002</td><td>drift</td><td>EPS</td><td>SAK-0002</td><td>51.000</td><td>battery_temperature, panel_temperature, payload_temperature</td><td>EPS, THERMAL</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Global</td><td>SYN-0003</td><td>step_change</td><td>COMM</td><td>SAK-0003</td><td>2.000</td><td>receiver_rssi, reaction_wheel_speed, panel_temperature</td><td>COMM, AOCS, THERMAL</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Global</td><td>SYN-0004</td><td>slow_degradation</td><td>EPS</td><td>SAK-0004</td><td>80.000</td><td>battery_voltage, battery_current, solar_array_voltage</td><td>EPS</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Global</td><td>SYN-0005</td><td>stuck_sensor</td><td>EPS</td><td>SAK-0005</td><td>48.000</td><td>solar_array_current, battery_voltage, payload_temperature</td><td>EPS, THERMAL</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Global</td><td>SYN-0006</td><td>noise_increase</td><td>AOCS</td><td>SAK-0006</td><td>-13.000</td><td>bus_voltage, payload_temperature, receiver_rssi</td><td>EPS, THERMAL, COMM</td><td>no</td><td>no</td></tr><tr><td>PCA / Global</td><td>SYN-0007</td><td>correlation_break</td><td>EPS</td><td>SAK-0007</td><td>2.000</td><td>bus_voltage, battery_voltage, reaction_wheel_speed</td><td>EPS, AOCS</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Global</td><td>SYN-0008</td><td>thermal_runaway</td><td>THERMAL</td><td>SAK-0008</td><td>56.000</td><td>payload_temperature, bus_voltage, battery_temperature</td><td>THERMAL, EPS</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Global</td><td>SYN-0009</td><td>voltage_drop_current_rise</td><td>EPS</td><td>SAK-0009</td><td>2.000</td><td>battery_voltage, solar_array_voltage, solar_array_current</td><td>EPS</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Global</td><td>SYN-0010</td><td>orbit_dependent_thermal</td><td>THERMAL</td><td>SAK-0011</td><td>25.000</td><td>payload_temperature, receiver_rssi, panel_temperature</td><td>THERMAL, COMM</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0001</td><td>spike</td><td>EPS</td><td>SAK-0001</td><td>2.000</td><td>bus_voltage, battery_voltage, reaction_wheel_speed</td><td>EPS, AOCS</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0002</td><td>drift</td><td>EPS</td><td>SAK-0003</td><td>51.000</td><td>battery_temperature, panel_temperature, payload_temperature</td><td>EPS, THERMAL</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0003</td><td>step_change</td><td>COMM</td><td>SAK-0004</td><td>2.000</td><td>receiver_rssi, reaction_wheel_speed, panel_temperature</td><td>COMM, AOCS, THERMAL</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0004</td><td>slow_degradation</td><td>EPS</td><td>SAK-0005</td><td>80.000</td><td>battery_voltage, battery_current, solar_array_voltage</td><td>EPS</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0005</td><td>stuck_sensor</td><td>EPS</td><td>SAK-0006</td><td>48.000</td><td>solar_array_current, battery_voltage, payload_temperature</td><td>EPS, THERMAL</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0006</td><td>noise_increase</td><td>AOCS</td><td>SAK-0007</td><td>-13.000</td><td>bus_voltage, payload_temperature, receiver_rssi</td><td>EPS, THERMAL, COMM</td><td>no</td><td>no</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0007</td><td>correlation_break</td><td>EPS</td><td>SAK-0008</td><td>2.000</td><td>bus_voltage, battery_voltage, reaction_wheel_speed</td><td>EPS, AOCS</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0008</td><td>thermal_runaway</td><td>THERMAL</td><td>SAK-0009</td><td>56.000</td><td>payload_temperature, bus_voltage, battery_temperature</td><td>THERMAL, EPS</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0009</td><td>voltage_drop_current_rise</td><td>EPS</td><td>SAK-0010</td><td>2.000</td><td>battery_voltage, solar_array_voltage, solar_array_current</td><td>EPS</td><td>yes</td><td>yes</td></tr><tr><td>PCA / Mode-Aware</td><td>SYN-0010</td><td>orbit_dependent_thermal</td><td>THERMAL</td><td>SAK-0012</td><td>24.000</td><td>payload_temperature, receiver_rssi, panel_temperature</td><td>THERMAL, COMM</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0001</td><td>spike</td><td>EPS</td><td>SAK-0001</td><td>2.000</td><td>bus_voltage, payload_temperature, battery_temperature</td><td>EPS, THERMAL</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0002</td><td>drift</td><td>EPS</td><td>SAK-0002</td><td>53.000</td><td>battery_temperature, panel_temperature, payload_temperature</td><td>EPS, THERMAL</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0003</td><td>step_change</td><td>COMM</td><td>SAK-0003</td><td>2.000</td><td>receiver_rssi, reaction_wheel_speed, panel_temperature</td><td>COMM, AOCS, THERMAL</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0004</td><td>slow_degradation</td><td>EPS</td><td>SAK-0004</td><td>98.000</td><td>battery_voltage, bus_voltage, battery_current</td><td>EPS</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0005</td><td>stuck_sensor</td><td>EPS</td><td>SAK-0005</td><td>46.000</td><td>solar_array_current, payload_temperature, bus_voltage</td><td>EPS, THERMAL</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0006</td><td>noise_increase</td><td>AOCS</td><td>SAK-0006</td><td>-13.000</td><td>angular_rate_x, reaction_wheel_speed, bus_voltage</td><td>AOCS, EPS</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0007</td><td>correlation_break</td><td>EPS</td><td>SAK-0007</td><td>2.000</td><td>bus_voltage, battery_voltage, payload_temperature</td><td>EPS, THERMAL</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0008</td><td>thermal_runaway</td><td>THERMAL</td><td>SAK-0008</td><td>56.000</td><td>payload_temperature, bus_voltage, battery_temperature</td><td>THERMAL, EPS</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0009</td><td>voltage_drop_current_rise</td><td>EPS</td><td>SAK-0009</td><td>2.000</td><td>battery_voltage, bus_voltage, solar_array_voltage</td><td>EPS</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Global</td><td>SYN-0010</td><td>orbit_dependent_thermal</td><td>THERMAL</td><td>SAK-0011</td><td>25.000</td><td>panel_temperature, payload_temperature, bus_voltage</td><td>THERMAL, EPS</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0001</td><td>spike</td><td>EPS</td><td>SAK-0001</td><td>2.000</td><td>bus_voltage, payload_temperature, battery_temperature</td><td>EPS, THERMAL</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0002</td><td>drift</td><td>EPS</td><td>SAK-0003</td><td>51.000</td><td>battery_temperature, panel_temperature, payload_temperature</td><td>EPS, THERMAL</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0003</td><td>step_change</td><td>COMM</td><td>SAK-0004</td><td>2.000</td><td>receiver_rssi, reaction_wheel_speed, panel_temperature</td><td>COMM, AOCS, THERMAL</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0004</td><td>slow_degradation</td><td>EPS</td><td>SAK-0005</td><td>97.000</td><td>battery_voltage, bus_voltage, battery_current</td><td>EPS</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0005</td><td>stuck_sensor</td><td>EPS</td><td>SAK-0006</td><td>48.000</td><td>solar_array_current, payload_temperature, battery_voltage</td><td>EPS, THERMAL</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0006</td><td>noise_increase</td><td>AOCS</td><td>SAK-0007</td><td>-13.000</td><td>angular_rate_x, reaction_wheel_speed, bus_voltage</td><td>AOCS, EPS</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0007</td><td>correlation_break</td><td>EPS</td><td>SAK-0008</td><td>2.000</td><td>bus_voltage, battery_voltage, payload_temperature</td><td>EPS, THERMAL</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0008</td><td>thermal_runaway</td><td>THERMAL</td><td>SAK-0009</td><td>56.000</td><td>payload_temperature, bus_voltage, battery_temperature</td><td>THERMAL, EPS</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0009</td><td>voltage_drop_current_rise</td><td>EPS</td><td>SAK-0010</td><td>2.000</td><td>battery_voltage, bus_voltage, solar_array_voltage</td><td>EPS</td><td>yes</td><td>yes</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SYN-0010</td><td>orbit_dependent_thermal</td><td>THERMAL</td><td>SAK-0012</td><td>25.000</td><td>panel_temperature, payload_temperature, bus_voltage</td><td>THERMAL, EPS</td><td>yes</td><td>yes</td></tr></tbody></table></div>
+      <div class="panel"><h2>Predicted Events</h2><h3>PCA / Global Events</h3>
 
 <details class="event-card">
-  <summary><strong>PCA-SAK-0001</strong>
-  <span>HIGH</span>
+  <summary><strong>SAK-0001</strong>
+  <span>CRITICAL</span>
   <small>2026-01-12T06:57:00+00:00</small></summary>
   <p><b>Interval:</b> 2026-01-12T06:50:00+00:00 — 2026-01-12T07:28:00+00:00</p>
   <p><b>Peak score:</b> 48.0284</p>
@@ -145,8 +145,8 @@
 
 
 <details class="event-card">
-  <summary><strong>PCA-SAK-0002</strong>
-  <span>HIGH</span>
+  <summary><strong>SAK-0002</strong>
+  <span>CRITICAL</span>
   <small>2026-01-12T13:36:00+00:00</small></summary>
   <p><b>Interval:</b> 2026-01-12T11:29:00+00:00 — 2026-01-12T13:48:00+00:00</p>
   <p><b>Peak score:</b> 0.5609</p>
@@ -156,7 +156,7 @@
 
 
 <details class="event-card">
-  <summary><strong>PCA-SAK-0003</strong>
+  <summary><strong>SAK-0003</strong>
   <span>HIGH</span>
   <small>2026-01-12T16:46:00+00:00</small></summary>
   <p><b>Interval:</b> 2026-01-12T16:30:00+00:00 — 2026-01-12T18:34:00+00:00</p>
@@ -167,7 +167,7 @@
 
 
 <details class="event-card">
-  <summary><strong>PCA-SAK-0004</strong>
+  <summary><strong>SAK-0004</strong>
   <span>HIGH</span>
   <small>2026-01-12T23:57:00+00:00</small></summary>
   <p><b>Interval:</b> 2026-01-12T22:48:00+00:00 — 2026-01-13T00:03:00+00:00</p>
@@ -178,7 +178,7 @@
 
 
 <details class="event-card">
-  <summary><strong>PCA-SAK-0005</strong>
+  <summary><strong>SAK-0005</strong>
   <span>MEDIUM</span>
   <small>2026-01-13T04:27:00+00:00</small></summary>
   <p><b>Interval:</b> 2026-01-13T04:06:00+00:00 — 2026-01-13T04:49:00+00:00</p>
@@ -189,7 +189,7 @@
 
 
 <details class="event-card">
-  <summary><strong>PCA-SAK-0006</strong>
+  <summary><strong>SAK-0006</strong>
   <span>LOW</span>
   <small>2026-01-13T08:07:00+00:00</small></summary>
   <p><b>Interval:</b> 2026-01-13T08:05:00+00:00 — 2026-01-13T08:23:00+00:00</p>
@@ -198,11 +198,78 @@
   <p><b>Top channels:</b> bus_voltage (EPS), payload_temperature (THERMAL), receiver_rssi (COMM)</p>
 </details>
 
-<h3>Dense Autoencoder Events</h3>
+<h3>PCA / Mode-Aware Events</h3>
 
 <details class="event-card">
-  <summary><strong>DENSE_AUTOENCODER-SAK-0001</strong>
+  <summary><strong>SAK-0001</strong>
+  <span>CRITICAL</span>
+  <small>2026-01-12T06:57:00+00:00</small></summary>
+  <p><b>Interval:</b> 2026-01-12T06:50:00+00:00 — 2026-01-12T07:27:00+00:00</p>
+  <p><b>Peak score:</b> 48.0284</p>
+  <p><b>Context:</b> {&#x27;operational_mode&#x27;: &#x27;payload&#x27;, &#x27;eclipse&#x27;: False, &#x27;orbit_phase&#x27;: 0.34375}</p>
+  <p><b>Top channels:</b> bus_voltage (EPS), battery_voltage (EPS), reaction_wheel_speed (AOCS)</p>
+</details>
+
+
+<details class="event-card">
+  <summary><strong>SAK-0002</strong>
+  <span>LOW</span>
+  <small>2026-01-12T08:04:00+00:00</small></summary>
+  <p><b>Interval:</b> 2026-01-12T08:04:00+00:00 — 2026-01-12T08:06:00+00:00</p>
+  <p><b>Peak score:</b> 0.0637</p>
+  <p><b>Context:</b> {&#x27;operational_mode&#x27;: &#x27;nominal&#x27;, &#x27;eclipse&#x27;: False, &#x27;orbit_phase&#x27;: 0.041666666666666664}</p>
+  <p><b>Top channels:</b> payload_temperature (THERMAL), receiver_rssi (COMM), transmitter_power (COMM)</p>
+</details>
+
+
+<details class="event-card">
+  <summary><strong>SAK-0003</strong>
+  <span>CRITICAL</span>
+  <small>2026-01-12T13:36:00+00:00</small></summary>
+  <p><b>Interval:</b> 2026-01-12T11:29:00+00:00 — 2026-01-12T13:48:00+00:00</p>
+  <p><b>Peak score:</b> 0.5609</p>
+  <p><b>Context:</b> {&#x27;operational_mode&#x27;: &#x27;nominal&#x27;, &#x27;eclipse&#x27;: False, &#x27;orbit_phase&#x27;: 0.5}</p>
+  <p><b>Top channels:</b> battery_temperature (EPS), panel_temperature (THERMAL), payload_temperature (THERMAL)</p>
+</details>
+
+
+<details class="event-card">
+  <summary><strong>SAK-0004</strong>
   <span>HIGH</span>
+  <small>2026-01-12T16:46:00+00:00</small></summary>
+  <p><b>Interval:</b> 2026-01-12T16:30:00+00:00 — 2026-01-12T18:34:00+00:00</p>
+  <p><b>Peak score:</b> 0.2281</p>
+  <p><b>Context:</b> {&#x27;operational_mode&#x27;: &#x27;payload&#x27;, &#x27;eclipse&#x27;: False, &#x27;orbit_phase&#x27;: 0.4791666666666667}</p>
+  <p><b>Top channels:</b> receiver_rssi (COMM), reaction_wheel_speed (AOCS), panel_temperature (THERMAL)</p>
+</details>
+
+
+<details class="event-card">
+  <summary><strong>SAK-0005</strong>
+  <span>HIGH</span>
+  <small>2026-01-12T23:57:00+00:00</small></summary>
+  <p><b>Interval:</b> 2026-01-12T22:48:00+00:00 — 2026-01-13T00:03:00+00:00</p>
+  <p><b>Peak score:</b> 0.2129</p>
+  <p><b>Context:</b> {&#x27;operational_mode&#x27;: &#x27;nominal&#x27;, &#x27;eclipse&#x27;: True, &#x27;orbit_phase&#x27;: 0.96875}</p>
+  <p><b>Top channels:</b> battery_voltage (EPS), battery_current (EPS), solar_array_voltage (EPS)</p>
+</details>
+
+
+<details class="event-card">
+  <summary><strong>SAK-0006</strong>
+  <span>MEDIUM</span>
+  <small>2026-01-13T04:27:00+00:00</small></summary>
+  <p><b>Interval:</b> 2026-01-13T04:06:00+00:00 — 2026-01-13T04:49:00+00:00</p>
+  <p><b>Peak score:</b> 0.1199</p>
+  <p><b>Context:</b> {&#x27;operational_mode&#x27;: &#x27;payload&#x27;, &#x27;eclipse&#x27;: True, &#x27;orbit_phase&#x27;: 0.78125}</p>
+  <p><b>Top channels:</b> solar_array_current (EPS), battery_voltage (EPS), payload_temperature (THERMAL)</p>
+</details>
+
+<h3>Dense Autoencoder / Global Events</h3>
+
+<details class="event-card">
+  <summary><strong>SAK-0001</strong>
+  <span>CRITICAL</span>
   <small>2026-01-12T06:57:00+00:00</small></summary>
   <p><b>Interval:</b> 2026-01-12T06:50:00+00:00 — 2026-01-12T07:27:00+00:00</p>
   <p><b>Peak score:</b> 46.2206</p>
@@ -212,8 +279,8 @@
 
 
 <details class="event-card">
-  <summary><strong>DENSE_AUTOENCODER-SAK-0002</strong>
-  <span>HIGH</span>
+  <summary><strong>SAK-0002</strong>
+  <span>CRITICAL</span>
   <small>2026-01-12T13:36:00+00:00</small></summary>
   <p><b>Interval:</b> 2026-01-12T11:31:00+00:00 — 2026-01-12T13:48:00+00:00</p>
   <p><b>Peak score:</b> 0.6757</p>
@@ -223,7 +290,7 @@
 
 
 <details class="event-card">
-  <summary><strong>DENSE_AUTOENCODER-SAK-0003</strong>
+  <summary><strong>SAK-0003</strong>
   <span>HIGH</span>
   <small>2026-01-12T16:47:00+00:00</small></summary>
   <p><b>Interval:</b> 2026-01-12T16:30:00+00:00 — 2026-01-12T18:32:00+00:00</p>
@@ -234,8 +301,8 @@
 
 
 <details class="event-card">
-  <summary><strong>DENSE_AUTOENCODER-SAK-0004</strong>
-  <span>HIGH</span>
+  <summary><strong>SAK-0004</strong>
+  <span>CRITICAL</span>
   <small>2026-01-12T23:57:00+00:00</small></summary>
   <p><b>Interval:</b> 2026-01-12T23:06:00+00:00 — 2026-01-13T00:07:00+00:00</p>
   <p><b>Peak score:</b> 0.3113</p>
@@ -245,7 +312,7 @@
 
 
 <details class="event-card">
-  <summary><strong>DENSE_AUTOENCODER-SAK-0005</strong>
+  <summary><strong>SAK-0005</strong>
   <span>MEDIUM</span>
   <small>2026-01-13T04:28:00+00:00</small></summary>
   <p><b>Interval:</b> 2026-01-13T04:04:00+00:00 — 2026-01-13T04:49:00+00:00</p>
@@ -256,13 +323,80 @@
 
 
 <details class="event-card">
-  <summary><strong>DENSE_AUTOENCODER-SAK-0006</strong>
-  <span>HIGH</span>
+  <summary><strong>SAK-0006</strong>
+  <span>CRITICAL</span>
   <small>2026-01-13T09:34:00+00:00</small></summary>
   <p><b>Interval:</b> 2026-01-13T08:05:00+00:00 — 2026-01-13T10:21:00+00:00</p>
   <p><b>Peak score:</b> 0.6440</p>
   <p><b>Context:</b> {&#x27;operational_mode&#x27;: &#x27;nominal&#x27;, &#x27;eclipse&#x27;: True, &#x27;orbit_phase&#x27;: 0.9791666666666666}</p>
   <p><b>Top channels:</b> angular_rate_x (AOCS), reaction_wheel_speed (AOCS), bus_voltage (EPS)</p>
+</details>
+
+<h3>Dense Autoencoder / Mode-Aware Events</h3>
+
+<details class="event-card">
+  <summary><strong>SAK-0001</strong>
+  <span>CRITICAL</span>
+  <small>2026-01-12T06:57:00+00:00</small></summary>
+  <p><b>Interval:</b> 2026-01-12T06:50:00+00:00 — 2026-01-12T07:27:00+00:00</p>
+  <p><b>Peak score:</b> 46.2206</p>
+  <p><b>Context:</b> {&#x27;operational_mode&#x27;: &#x27;payload&#x27;, &#x27;eclipse&#x27;: False, &#x27;orbit_phase&#x27;: 0.34375}</p>
+  <p><b>Top channels:</b> bus_voltage (EPS), payload_temperature (THERMAL), battery_temperature (EPS)</p>
+</details>
+
+
+<details class="event-card">
+  <summary><strong>SAK-0002</strong>
+  <span>LOW</span>
+  <small>2026-01-12T08:05:00+00:00</small></summary>
+  <p><b>Interval:</b> 2026-01-12T08:05:00+00:00 — 2026-01-12T08:06:00+00:00</p>
+  <p><b>Peak score:</b> 0.0547</p>
+  <p><b>Context:</b> {&#x27;operational_mode&#x27;: &#x27;nominal&#x27;, &#x27;eclipse&#x27;: False, &#x27;orbit_phase&#x27;: 0.052083333333333336}</p>
+  <p><b>Top channels:</b> payload_temperature (THERMAL), receiver_rssi (COMM), bus_voltage (EPS)</p>
+</details>
+
+
+<details class="event-card">
+  <summary><strong>SAK-0003</strong>
+  <span>CRITICAL</span>
+  <small>2026-01-12T13:36:00+00:00</small></summary>
+  <p><b>Interval:</b> 2026-01-12T11:29:00+00:00 — 2026-01-12T13:49:00+00:00</p>
+  <p><b>Peak score:</b> 0.6757</p>
+  <p><b>Context:</b> {&#x27;operational_mode&#x27;: &#x27;nominal&#x27;, &#x27;eclipse&#x27;: False, &#x27;orbit_phase&#x27;: 0.5}</p>
+  <p><b>Top channels:</b> battery_temperature (EPS), panel_temperature (THERMAL), payload_temperature (THERMAL)</p>
+</details>
+
+
+<details class="event-card">
+  <summary><strong>SAK-0004</strong>
+  <span>HIGH</span>
+  <small>2026-01-12T16:47:00+00:00</small></summary>
+  <p><b>Interval:</b> 2026-01-12T16:30:00+00:00 — 2026-01-12T18:32:00+00:00</p>
+  <p><b>Peak score:</b> 0.2176</p>
+  <p><b>Context:</b> {&#x27;operational_mode&#x27;: &#x27;payload&#x27;, &#x27;eclipse&#x27;: False, &#x27;orbit_phase&#x27;: 0.4895833333333333}</p>
+  <p><b>Top channels:</b> receiver_rssi (COMM), reaction_wheel_speed (AOCS), panel_temperature (THERMAL)</p>
+</details>
+
+
+<details class="event-card">
+  <summary><strong>SAK-0005</strong>
+  <span>CRITICAL</span>
+  <small>2026-01-12T23:57:00+00:00</small></summary>
+  <p><b>Interval:</b> 2026-01-12T23:05:00+00:00 — 2026-01-13T00:07:00+00:00</p>
+  <p><b>Peak score:</b> 0.3113</p>
+  <p><b>Context:</b> {&#x27;operational_mode&#x27;: &#x27;nominal&#x27;, &#x27;eclipse&#x27;: True, &#x27;orbit_phase&#x27;: 0.96875}</p>
+  <p><b>Top channels:</b> battery_voltage (EPS), bus_voltage (EPS), battery_current (EPS)</p>
+</details>
+
+
+<details class="event-card">
+  <summary><strong>SAK-0006</strong>
+  <span>MEDIUM</span>
+  <small>2026-01-13T04:28:00+00:00</small></summary>
+  <p><b>Interval:</b> 2026-01-13T04:06:00+00:00 — 2026-01-13T04:49:00+00:00</p>
+  <p><b>Peak score:</b> 0.1054</p>
+  <p><b>Context:</b> {&#x27;operational_mode&#x27;: &#x27;payload&#x27;, &#x27;eclipse&#x27;: True, &#x27;orbit_phase&#x27;: 0.7916666666666666}</p>
+  <p><b>Top channels:</b> solar_array_current (EPS), payload_temperature (THERMAL), battery_voltage (EPS)</p>
 </details>
 </div>
     </section>
@@ -272,9 +406,9 @@
         <div class="panel"><h2>Top Explanation Channels</h2><img src="../artifacts/synthetic_models/dashboard/channel_summary.png" alt="Channel summary chart"></div>
         <div class="panel"><h2>Subsystem Explanation Mass</h2><img src="../artifacts/synthetic_models/dashboard/subsystem_summary.png" alt="Subsystem contribution chart"></div>
       </div>
-      <div class="panel"><h2>False Positive Events</h2><p>No rows.</p></div>
-      <div class="panel"><h2>Channel Summary Table</h2><table><thead><tr><th>model</th><th>channel</th><th>subsystem</th><th>top3_count</th><th>mean_contribution</th><th>rank1_count</th></tr></thead><tbody><tr><td>Dense Autoencoder</td><td>bus_voltage</td><td>EPS</td><td>8.000</td><td>0.281</td><td>2.000</td></tr><tr><td>Dense Autoencoder</td><td>payload_temperature</td><td>THERMAL</td><td>7.000</td><td>0.185</td><td>1.000</td></tr><tr><td>Dense Autoencoder</td><td>battery_temperature</td><td>EPS</td><td>4.000</td><td>0.229</td><td>1.000</td></tr><tr><td>Dense Autoencoder</td><td>battery_voltage</td><td>EPS</td><td>3.000</td><td>0.429</td><td>2.000</td></tr><tr><td>Dense Autoencoder</td><td>panel_temperature</td><td>THERMAL</td><td>3.000</td><td>0.142</td><td>1.000</td></tr><tr><td>Dense Autoencoder</td><td>reaction_wheel_speed</td><td>AOCS</td><td>2.000</td><td>0.143</td><td>0.000</td></tr><tr><td>Dense Autoencoder</td><td>angular_rate_x</td><td>AOCS</td><td>1.000</td><td>0.654</td><td>1.000</td></tr><tr><td>Dense Autoencoder</td><td>receiver_rssi</td><td>COMM</td><td>1.000</td><td>0.650</td><td>1.000</td></tr><tr><td>Dense Autoencoder</td><td>solar_array_current</td><td>EPS</td><td>1.000</td><td>0.499</td><td>1.000</td></tr><tr><td>Dense Autoencoder</td><td>transmitter_power</td><td>COMM</td><td>1.000</td><td>0.268</td><td>1.000</td></tr><tr><td>Dense Autoencoder</td><td>battery_current</td><td>EPS</td><td>1.000</td><td>0.083</td><td>0.000</td></tr><tr><td>Dense Autoencoder</td><td>solar_array_voltage</td><td>EPS</td><td>1.000</td><td>0.076</td><td>0.000</td></tr><tr><td>PCA</td><td>bus_voltage</td><td>EPS</td><td>5.000</td><td>0.419</td><td>3.000</td></tr><tr><td>PCA</td><td>battery_voltage</td><td>EPS</td><td>5.000</td><td>0.284</td><td>2.000</td></tr><tr><td>PCA</td><td>payload_temperature</td><td>THERMAL</td><td>5.000</td><td>0.236</td><td>2.000</td></tr><tr><td>PCA</td><td>receiver_rssi</td><td>COMM</td><td>4.000</td><td>0.276</td><td>1.000</td></tr><tr><td>PCA</td><td>panel_temperature</td><td>THERMAL</td><td>3.000</td><td>0.136</td><td>0.000</td></tr><tr><td>PCA</td><td>reaction_wheel_speed</td><td>AOCS</td><td>3.000</td><td>0.074</td><td>0.000</td></tr><tr><td>PCA</td><td>battery_temperature</td><td>EPS</td><td>2.000</td><td>0.360</td><td>1.000</td></tr><tr><td>PCA</td><td>solar_array_current</td><td>EPS</td><td>2.000</td><td>0.345</td><td>1.000</td></tr><tr><td>PCA</td><td>solar_array_voltage</td><td>EPS</td><td>2.000</td><td>0.089</td><td>0.000</td></tr><tr><td>PCA</td><td>transmitter_power</td><td>COMM</td><td>1.000</td><td>0.314</td><td>1.000</td></tr><tr><td>PCA</td><td>battery_current</td><td>EPS</td><td>1.000</td><td>0.102</td><td>0.000</td></tr></tbody></table></div>
-      <div class="panel"><h2>Subsystem Summary Table</h2><table><thead><tr><th>model</th><th>subsystem</th><th>total_contribution</th><th>channel_mentions</th></tr></thead><tbody><tr><td>Dense Autoencoder</td><td>EPS</td><td>5.707</td><td>29.000</td></tr><tr><td>Dense Autoencoder</td><td>THERMAL</td><td>1.747</td><td>11.000</td></tr><tr><td>Dense Autoencoder</td><td>COMM</td><td>1.453</td><td>10.000</td></tr><tr><td>Dense Autoencoder</td><td>AOCS</td><td>0.980</td><td>5.000</td></tr><tr><td>PCA</td><td>EPS</td><td>5.949</td><td>28.000</td></tr><tr><td>PCA</td><td>COMM</td><td>1.956</td><td>13.000</td></tr><tr><td>PCA</td><td>THERMAL</td><td>1.765</td><td>10.000</td></tr><tr><td>PCA</td><td>AOCS</td><td>0.280</td><td>4.000</td></tr></tbody></table></div>
+      <div class="panel"><h2>False Positive Events</h2><table><thead><tr><th>model</th><th>predicted_event_id</th><th>start</th><th>end</th><th>risk_level</th><th>operational_mode</th><th>top_channels</th></tr></thead><tbody><tr><td>PCA / Global</td><td>SAK-0010</td><td>2026-01-14T04:05:00+00:00</td><td>2026-01-14T04:08:00+00:00</td><td>LOW</td><td>payload</td><td>transmitter_power, receiver_rssi, bus_voltage</td></tr><tr><td>PCA / Mode-Aware</td><td>SAK-0002</td><td>2026-01-12T08:04:00+00:00</td><td>2026-01-12T08:06:00+00:00</td><td>LOW</td><td>nominal</td><td>payload_temperature, receiver_rssi, transmitter_power</td></tr><tr><td>PCA / Mode-Aware</td><td>SAK-0011</td><td>2026-01-14T04:05:00+00:00</td><td>2026-01-14T04:08:00+00:00</td><td>LOW</td><td>payload</td><td>transmitter_power, receiver_rssi, bus_voltage</td></tr><tr><td>Dense Autoencoder / Global</td><td>SAK-0010</td><td>2026-01-14T04:05:00+00:00</td><td>2026-01-14T04:10:00+00:00</td><td>LOW</td><td>payload</td><td>transmitter_power, payload_temperature, battery_temperature</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SAK-0002</td><td>2026-01-12T08:05:00+00:00</td><td>2026-01-12T08:06:00+00:00</td><td>LOW</td><td>nominal</td><td>payload_temperature, receiver_rssi, bus_voltage</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SAK-0011</td><td>2026-01-14T04:05:00+00:00</td><td>2026-01-14T04:08:00+00:00</td><td>LOW</td><td>payload</td><td>payload_temperature, transmitter_power, receiver_rssi</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>SAK-0013</td><td>2026-01-14T20:07:00+00:00</td><td>2026-01-14T20:08:00+00:00</td><td>LOW</td><td>nominal</td><td>payload_temperature, bus_voltage, transmitter_power</td></tr></tbody></table></div>
+      <div class="panel"><h2>Channel Summary Table</h2><table><thead><tr><th>model</th><th>channel</th><th>subsystem</th><th>top3_count</th><th>mean_contribution</th><th>rank1_count</th></tr></thead><tbody><tr><td>Dense Autoencoder / Global</td><td>bus_voltage</td><td>EPS</td><td>8.000</td><td>0.281</td><td>2.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>payload_temperature</td><td>THERMAL</td><td>7.000</td><td>0.185</td><td>1.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>battery_temperature</td><td>EPS</td><td>4.000</td><td>0.229</td><td>1.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>battery_voltage</td><td>EPS</td><td>3.000</td><td>0.429</td><td>2.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>panel_temperature</td><td>THERMAL</td><td>3.000</td><td>0.142</td><td>1.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>reaction_wheel_speed</td><td>AOCS</td><td>2.000</td><td>0.143</td><td>0.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>angular_rate_x</td><td>AOCS</td><td>1.000</td><td>0.654</td><td>1.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>receiver_rssi</td><td>COMM</td><td>1.000</td><td>0.650</td><td>1.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>solar_array_current</td><td>EPS</td><td>1.000</td><td>0.499</td><td>1.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>transmitter_power</td><td>COMM</td><td>1.000</td><td>0.268</td><td>1.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>battery_current</td><td>EPS</td><td>1.000</td><td>0.083</td><td>0.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>solar_array_voltage</td><td>EPS</td><td>1.000</td><td>0.076</td><td>0.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>bus_voltage</td><td>EPS</td><td>9.000</td><td>0.275</td><td>2.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>payload_temperature</td><td>THERMAL</td><td>9.000</td><td>0.239</td><td>4.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>battery_voltage</td><td>EPS</td><td>4.000</td><td>0.337</td><td>2.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>receiver_rssi</td><td>COMM</td><td>3.000</td><td>0.340</td><td>1.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>battery_temperature</td><td>EPS</td><td>3.000</td><td>0.266</td><td>1.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>panel_temperature</td><td>THERMAL</td><td>3.000</td><td>0.144</td><td>1.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>transmitter_power</td><td>COMM</td><td>2.000</td><td>0.194</td><td>0.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>reaction_wheel_speed</td><td>AOCS</td><td>2.000</td><td>0.143</td><td>0.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>angular_rate_x</td><td>AOCS</td><td>1.000</td><td>0.654</td><td>1.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>solar_array_current</td><td>EPS</td><td>1.000</td><td>0.525</td><td>1.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>battery_current</td><td>EPS</td><td>1.000</td><td>0.083</td><td>0.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>solar_array_voltage</td><td>EPS</td><td>1.000</td><td>0.076</td><td>0.000</td></tr><tr><td>PCA / Global</td><td>bus_voltage</td><td>EPS</td><td>5.000</td><td>0.419</td><td>3.000</td></tr><tr><td>PCA / Global</td><td>battery_voltage</td><td>EPS</td><td>5.000</td><td>0.284</td><td>2.000</td></tr><tr><td>PCA / Global</td><td>payload_temperature</td><td>THERMAL</td><td>5.000</td><td>0.236</td><td>2.000</td></tr><tr><td>PCA / Global</td><td>receiver_rssi</td><td>COMM</td><td>4.000</td><td>0.276</td><td>1.000</td></tr><tr><td>PCA / Global</td><td>panel_temperature</td><td>THERMAL</td><td>3.000</td><td>0.136</td><td>0.000</td></tr><tr><td>PCA / Global</td><td>reaction_wheel_speed</td><td>AOCS</td><td>3.000</td><td>0.074</td><td>0.000</td></tr><tr><td>PCA / Global</td><td>battery_temperature</td><td>EPS</td><td>2.000</td><td>0.360</td><td>1.000</td></tr><tr><td>PCA / Global</td><td>solar_array_current</td><td>EPS</td><td>2.000</td><td>0.345</td><td>1.000</td></tr><tr><td>PCA / Global</td><td>solar_array_voltage</td><td>EPS</td><td>2.000</td><td>0.089</td><td>0.000</td></tr><tr><td>PCA / Global</td><td>transmitter_power</td><td>COMM</td><td>1.000</td><td>0.314</td><td>1.000</td></tr><tr><td>PCA / Global</td><td>battery_current</td><td>EPS</td><td>1.000</td><td>0.102</td><td>0.000</td></tr><tr><td>PCA / Mode-Aware</td><td>payload_temperature</td><td>THERMAL</td><td>6.000</td><td>0.279</td><td>3.000</td></tr><tr><td>PCA / Mode-Aware</td><td>bus_voltage</td><td>EPS</td><td>5.000</td><td>0.421</td><td>3.000</td></tr><tr><td>PCA / Mode-Aware</td><td>battery_voltage</td><td>EPS</td><td>5.000</td><td>0.284</td><td>2.000</td></tr><tr><td>PCA / Mode-Aware</td><td>receiver_rssi</td><td>COMM</td><td>5.000</td><td>0.264</td><td>1.000</td></tr><tr><td>PCA / Mode-Aware</td><td>panel_temperature</td><td>THERMAL</td><td>3.000</td><td>0.135</td><td>0.000</td></tr><tr><td>PCA / Mode-Aware</td><td>reaction_wheel_speed</td><td>AOCS</td><td>3.000</td><td>0.074</td><td>0.000</td></tr><tr><td>PCA / Mode-Aware</td><td>battery_temperature</td><td>EPS</td><td>2.000</td><td>0.360</td><td>1.000</td></tr><tr><td>PCA / Mode-Aware</td><td>solar_array_current</td><td>EPS</td><td>2.000</td><td>0.345</td><td>1.000</td></tr><tr><td>PCA / Mode-Aware</td><td>transmitter_power</td><td>COMM</td><td>2.000</td><td>0.210</td><td>1.000</td></tr><tr><td>PCA / Mode-Aware</td><td>solar_array_voltage</td><td>EPS</td><td>2.000</td><td>0.089</td><td>0.000</td></tr><tr><td>PCA / Mode-Aware</td><td>battery_current</td><td>EPS</td><td>1.000</td><td>0.102</td><td>0.000</td></tr></tbody></table></div>
+      <div class="panel"><h2>Subsystem Summary Table</h2><table><thead><tr><th>model</th><th>subsystem</th><th>total_contribution</th><th>channel_mentions</th></tr></thead><tbody><tr><td>Dense Autoencoder / Global</td><td>EPS</td><td>5.707</td><td>29.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>THERMAL</td><td>1.747</td><td>11.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>COMM</td><td>1.453</td><td>10.000</td></tr><tr><td>Dense Autoencoder / Global</td><td>AOCS</td><td>0.980</td><td>5.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>EPS</td><td>6.005</td><td>31.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>THERMAL</td><td>2.718</td><td>14.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>COMM</td><td>1.983</td><td>14.000</td></tr><tr><td>Dense Autoencoder / Mode-Aware</td><td>AOCS</td><td>1.021</td><td>6.000</td></tr><tr><td>PCA / Global</td><td>EPS</td><td>5.949</td><td>28.000</td></tr><tr><td>PCA / Global</td><td>COMM</td><td>1.956</td><td>13.000</td></tr><tr><td>PCA / Global</td><td>THERMAL</td><td>1.765</td><td>10.000</td></tr><tr><td>PCA / Global</td><td>AOCS</td><td>0.280</td><td>4.000</td></tr><tr><td>PCA / Mode-Aware</td><td>EPS</td><td>6.051</td><td>29.000</td></tr><tr><td>PCA / Mode-Aware</td><td>COMM</td><td>2.273</td><td>15.000</td></tr><tr><td>PCA / Mode-Aware</td><td>THERMAL</td><td>2.260</td><td>11.000</td></tr><tr><td>PCA / Mode-Aware</td><td>AOCS</td><td>0.331</td><td>5.000</td></tr></tbody></table></div>
     </section>
 
     <section id="artifacts" class="section">

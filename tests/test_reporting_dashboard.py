@@ -47,31 +47,33 @@ def _comparison_payload() -> dict:
             "test_rows": 20,
             "test_events": 1,
         },
-        "pca": base_model,
-        "dense_autoencoder": base_model,
+        "pca_global": base_model,
+        "dense_autoencoder_global": base_model,
     }
 
 
 def test_model_rows_are_flattened_for_tables() -> None:
     rows = experiment_model_rows(_comparison_payload())
 
-    assert rows[0]["model"] == "PCA"
+    assert rows[0]["model"] == "PCA / Global"
     assert rows[0]["event_f1"] == 1.0
-    assert rows[1]["model"] == "Dense Autoencoder"
+    assert rows[1]["model"] == "Dense Autoencoder / Global"
 
 
 def test_static_dashboard_is_rendered(tmp_path: Path) -> None:
     artifact_dir = tmp_path / "artifacts" / "synthetic_models"
-    for model in ("pca", "dense_autoencoder"):
+    for model in ("pca_global", "dense_autoencoder_global"):
         model_dir = artifact_dir / model
         model_dir.mkdir(parents=True)
-        (model_dir / "score_timeline.png").write_bytes(b"fake")
-        (model_dir / "channel_error_heatmap.png").write_bytes(b"fake")
+        plots_dir = model_dir / "plots"
+        plots_dir.mkdir()
+        (plots_dir / "score_timeline.png").write_bytes(b"fake")
+        (plots_dir / "channel_error_heatmap.png").write_bytes(b"fake")
         (model_dir / "events.json").write_text(
             json.dumps(
                 [
                     {
-                        "event_id": f"{model}-event",
+                        "event_id": "SAK-0001",
                         "start": "2026-01-01T00:00:00Z",
                         "end": "2026-01-01T00:05:00Z",
                         "peak_time": "2026-01-01T00:02:00Z",
@@ -91,10 +93,25 @@ def test_static_dashboard_is_rendered(tmp_path: Path) -> None:
         )
 
     dashboard_path = tmp_path / "dashboards" / "sak_synthetic_dashboard.html"
+    manifest_path = tmp_path / "injection_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            [
+                {
+                    "event_id": "SYN-0001",
+                    "anomaly_type": "voltage_drop",
+                    "affected_channels": ["battery_voltage"],
+                    "expected_subsystem": "EPS",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
     render_synthetic_dashboard(
         comparison=_comparison_payload(),
         artifact_dir=artifact_dir,
         dashboard_path=dashboard_path,
+        manifest_path=manifest_path,
     )
 
     assert dashboard_path.exists()
@@ -107,3 +124,8 @@ def test_static_dashboard_is_rendered(tmp_path: Path) -> None:
     assert (artifact_dir / "dashboard" / "event_diagnostics.png").exists()
     assert (artifact_dir / "dashboard" / "channel_summary.csv").exists()
     assert (artifact_dir / "dashboard" / "subsystem_summary.png").exists()
+    diagnostics = (
+        artifact_dir / "dashboard" / "event_diagnostics.csv"
+    ).read_text(encoding="utf-8")
+    assert "battery_voltage" in diagnostics
+    assert "EPS" in diagnostics

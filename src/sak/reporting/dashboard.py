@@ -12,12 +12,12 @@ import matplotlib
 import numpy as np
 
 from sak.reporting.results import (
-    MODEL_LABELS,
     channel_summary_rows,
     delay_rows,
     event_diagnostic_rows,
     experiment_model_rows,
     false_positive_rows,
+    model_label,
     subsystem_summary_rows,
     threshold_sweep_rows,
     write_csv,
@@ -147,18 +147,30 @@ def _plot_detection_delays(rows: list[dict[str, str | float]], output_path: Path
     events = sorted({str(row["true_event_id"]) for row in rows})
     models = sorted({str(row["model"]) for row in rows})
     x = np.arange(len(events))
-    width = 0.35
+    width = 0.8 / max(len(models), 1)
     figure, axis = plt.subplots(figsize=(12, 5.2))
     for model_index, model in enumerate(models):
         values = []
         for event in events:
             match = next(
-                row
-                for row in rows
-                if row["model"] == model and row["true_event_id"] == event
+                (
+                    row
+                    for row in rows
+                    if row["model"] == model and row["true_event_id"] == event
+                ),
+                None,
             )
-            values.append(float(match["detection_delay_min"]))
-        axis.bar(x + (model_index - 0.5) * width, values, width, label=model)
+            values.append(
+                float(match["detection_delay_min"])
+                if match is not None
+                else float("nan")
+            )
+        axis.bar(
+            x + (model_index - (len(models) - 1) / 2.0) * width,
+            values,
+            width,
+            label=model,
+        )
     axis.axhline(0.0, color="#111827", linewidth=0.8)
     axis.set_xticks(x)
     axis.set_xticklabels(events, rotation=30, ha="right")
@@ -180,7 +192,7 @@ def _plot_event_diagnostics(rows: list[dict[str, str | float]], output_path: Pat
     }
     models = sorted({str(row["model"]) for row in rows})
     x = np.arange(len(events))
-    width = 0.35
+    width = 0.8 / max(len(models), 1)
     figure, axis = plt.subplots(figsize=(13, 5.6))
     colors = {"yes": "#2f6f73", "no": "#d1495b"}
 
@@ -196,7 +208,7 @@ def _plot_event_diagnostics(rows: list[dict[str, str | float]], output_path: Pat
             values.append(float(match["detection_delay_min"]))
             bar_colors.append(colors.get(str(match["channel_hit"]), "#7a4fe0"))
         axis.bar(
-            x + (model_index - 0.5) * width,
+            x + (model_index - (len(models) - 1) / 2.0) * width,
             values,
             width,
             label=model,
@@ -285,12 +297,17 @@ def _plot_subsystem_summary(rows: list[dict[str, str | float]], output_path: Pat
     plt.close(figure)
 
 
-def _load_events(artifact_dir: Path) -> dict[str, list[dict[str, Any]]]:
+def _load_events(
+    artifact_dir: Path,
+    model_keys: list[str],
+) -> dict[str, list[dict[str, Any]]]:
     events: dict[str, list[dict[str, Any]]] = {}
-    for model_key in MODEL_LABELS:
+    for model_key in model_keys:
         path = artifact_dir / model_key / "events.json"
         if path.exists():
-            events[MODEL_LABELS[model_key]] = json.loads(path.read_text(encoding="utf-8"))
+            events[model_label(model_key)] = json.loads(
+                path.read_text(encoding="utf-8")
+            )
     return events
 
 
@@ -342,6 +359,7 @@ def render_synthetic_dashboard(
     comparison: dict[str, Any],
     artifact_dir: Path,
     dashboard_path: Path,
+    manifest_path: Path | None = None,
 ) -> Path:
     """Generate CSV tables, plots and a static HTML dashboard."""
 
@@ -349,11 +367,18 @@ def render_synthetic_dashboard(
     model_rows = experiment_model_rows(comparison)
     sweep_rows = threshold_sweep_rows(comparison)
     delays = delay_rows(comparison)
-    manifest_path = Path("data/synthetic/injection_manifest.json")
-    event_rows = event_diagnostic_rows(comparison, artifact_dir, manifest_path)
+    model_keys = [key for key in comparison if key != "dataset"]
+    resolved_manifest_path = manifest_path or Path(
+        "data/synthetic/injection_manifest.json"
+    )
+    event_rows = event_diagnostic_rows(
+        comparison,
+        artifact_dir,
+        resolved_manifest_path,
+    )
     false_positives = false_positive_rows(comparison, artifact_dir)
-    channel_rows = channel_summary_rows(artifact_dir)
-    subsystem_rows = subsystem_summary_rows(artifact_dir)
+    channel_rows = channel_summary_rows(artifact_dir, model_keys)
+    subsystem_rows = subsystem_summary_rows(artifact_dir, model_keys)
 
     write_csv(dashboard_artifacts / "model_comparison.csv", model_rows)
     write_csv(dashboard_artifacts / "threshold_sweep.csv", sweep_rows)
@@ -383,8 +408,20 @@ def render_synthetic_dashboard(
     best_channel = max(model_rows, key=lambda row: float(row["channel_hit_at_3"]))
     best_event = max(model_rows, key=lambda row: float(row["event_f1"]))
     low_noise = min(model_rows, key=lambda row: float(row["false_alarms_per_day"]))
-    pca_score = artifact_dir / "pca" / "score_timeline.png"
-    ae_heatmap = artifact_dir / "dense_autoencoder" / "channel_error_heatmap.png"
+    pca_variant = "pca_global" if "pca_global" in comparison else "pca"
+    ae_variant = (
+        "dense_autoencoder_global"
+        if "dense_autoencoder_global" in comparison
+        else "dense_autoencoder"
+    )
+    pca_score = artifact_dir / pca_variant / "plots" / "score_timeline.png"
+    ae_heatmap = (
+        artifact_dir / ae_variant / "plots" / "channel_error_heatmap.png"
+    )
+    if not pca_score.exists():
+        pca_score = artifact_dir / pca_variant / "score_timeline.png"
+    if not ae_heatmap.exists():
+        ae_heatmap = artifact_dir / ae_variant / "channel_error_heatmap.png"
 
     html_text = f"""<!doctype html>
 <html lang="tr">
@@ -513,7 +550,7 @@ def render_synthetic_dashboard(
         <div class="panel"><h2>Autoencoder Heatmap</h2><img src="{_relative(ae_heatmap, dashboard_path)}" alt="Autoencoder channel heatmap"></div>
       </div>
       <div class="panel"><h2>Event Diagnostics</h2><img src="{_relative(event_plot, dashboard_path)}" alt="Event diagnostics chart">{_html_table(event_rows)}</div>
-      <div class="panel"><h2>Predicted Events</h2>{_event_cards(_load_events(artifact_dir))}</div>
+      <div class="panel"><h2>Predicted Events</h2>{_event_cards(_load_events(artifact_dir, model_keys))}</div>
     </section>
 
     <section id="diagnostics" class="section">

@@ -11,7 +11,17 @@ from typing import Any
 MODEL_LABELS = {
     "pca": "PCA",
     "dense_autoencoder": "Dense Autoencoder",
+    "pca_global": "PCA / Global",
+    "pca_mode_aware": "PCA / Mode-Aware",
+    "dense_autoencoder_global": "Dense Autoencoder / Global",
+    "dense_autoencoder_mode_aware": "Dense Autoencoder / Mode-Aware",
 }
+
+
+def model_label(model_key: str) -> str:
+    """Return a readable label while preserving unknown variant names."""
+
+    return MODEL_LABELS.get(model_key, model_key)
 
 
 def _metric(payload: dict[str, Any], *path: str, default: float = 0.0) -> float:
@@ -32,7 +42,7 @@ def experiment_model_rows(comparison: dict[str, Any]) -> list[dict[str, str | fl
             continue
         rows.append(
             {
-                "model": MODEL_LABELS.get(model_key, model_key),
+                "model": model_label(model_key),
                 "event_precision": _metric(model_payload, "event_metrics", "precision"),
                 "event_recall": _metric(model_payload, "event_metrics", "recall"),
                 "event_f1": _metric(model_payload, "event_metrics", "f1"),
@@ -77,7 +87,7 @@ def threshold_sweep_rows(comparison: dict[str, Any]) -> list[dict[str, str | flo
         for entry in model_payload.get("threshold_sweep", []):
             rows.append(
                 {
-                    "model": MODEL_LABELS.get(model_key, model_key),
+                    "model": model_label(model_key),
                     "quantile": float(entry["quantile"]),
                     "threshold": float(entry["threshold"]),
                     "event_precision": float(entry["event_precision"]),
@@ -85,7 +95,7 @@ def threshold_sweep_rows(comparison: dict[str, Any]) -> list[dict[str, str | flo
                     "event_f1": float(entry["event_f1"]),
                     "false_alarms_per_day": float(entry["false_alarms_per_day"]),
                     "median_delay_min": float(
-                        entry["median_detection_delay_minutes"]
+                        entry["median_detection_delay_minutes"] or 0.0
                     ),
                 }
             )
@@ -102,7 +112,7 @@ def delay_rows(comparison: dict[str, Any]) -> list[dict[str, str | float]]:
         for match in model_payload.get("event_metrics", {}).get("matches", []):
             rows.append(
                 {
-                    "model": MODEL_LABELS.get(model_key, model_key),
+                    "model": model_label(model_key),
                     "true_event_id": str(match["true_event_id"]),
                     "predicted_event_id": str(match["predicted_event_id"]),
                     "detection_delay_min": float(match["detection_delay_minutes"]),
@@ -132,8 +142,7 @@ def event_diagnostic_rows(
     for model_key, model_payload in comparison.items():
         if model_key == "dataset":
             continue
-        model_label = MODEL_LABELS.get(model_key, model_key)
-        prefix = model_key.upper()
+        display_name = model_label(model_key)
         predicted_events = {
             str(event["event_id"]): event
             for event in _load_json_array(artifact_dir / model_key / "events.json")
@@ -148,7 +157,7 @@ def event_diagnostic_rows(
             if match is None:
                 rows.append(
                     {
-                        "model": model_label,
+                        "model": display_name,
                         "true_event_id": str(truth["event_id"]),
                         "anomaly_type": str(truth["anomaly_type"]),
                         "expected_subsystem": str(truth["expected_subsystem"]),
@@ -163,7 +172,16 @@ def event_diagnostic_rows(
                 continue
 
             predicted_event_id = str(match["predicted_event_id"])
-            event = predicted_events.get(f"{prefix}-{predicted_event_id}", {})
+            event = predicted_events.get(predicted_event_id)
+            if event is None:
+                event = next(
+                    (
+                        candidate
+                        for event_id, candidate in predicted_events.items()
+                        if event_id.endswith(f"-{predicted_event_id}")
+                    ),
+                    {},
+                )
             top_channels_payload = event.get("top_channels", [])
             top_channels = [str(item["channel"]) for item in top_channels_payload[:3]]
             top_subsystems = [
@@ -175,7 +193,7 @@ def event_diagnostic_rows(
             expected_subsystem = str(truth["expected_subsystem"])
             rows.append(
                 {
-                    "model": model_label,
+                    "model": display_name,
                     "true_event_id": str(truth["event_id"]),
                     "anomaly_type": str(truth["anomaly_type"]),
                     "expected_subsystem": expected_subsystem,
@@ -208,15 +226,19 @@ def false_positive_rows(
             str(match["predicted_event_id"])
             for match in model_payload.get("event_metrics", {}).get("matches", [])
         }
-        prefix = model_key.upper()
-        model_label = MODEL_LABELS.get(model_key, model_key)
+        display_name = model_label(model_key)
         for event in _load_json_array(artifact_dir / model_key / "events.json"):
-            internal_id = str(event["event_id"]).replace(f"{prefix}-", "", 1)
+            event_id = str(event["event_id"])
+            internal_id = (
+                f"SAK-{event_id.rsplit('-SAK-', maxsplit=1)[1]}"
+                if "-SAK-" in event_id
+                else event_id
+            )
             if internal_id in matched_ids:
                 continue
             rows.append(
                 {
-                    "model": model_label,
+                    "model": display_name,
                     "predicted_event_id": internal_id,
                     "start": str(event["start"]),
                     "end": str(event["end"]),
@@ -234,18 +256,21 @@ def false_positive_rows(
 
 def channel_summary_rows(
     artifact_dir: Path,
+    model_keys: Iterable[str] | None = None,
 ) -> list[dict[str, str | float]]:
     """Aggregate how often channels appear in top-3 explanations."""
 
     summary: dict[tuple[str, str], dict[str, str | float]] = {}
-    for model_key, model_label in MODEL_LABELS.items():
+    keys = list(model_keys) if model_keys is not None else list(MODEL_LABELS)
+    for model_key in keys:
+        display_name = model_label(model_key)
         for event in _load_json_array(artifact_dir / model_key / "events.json"):
             for rank, channel in enumerate(event.get("top_channels", [])[:3], start=1):
-                key = (model_label, str(channel["channel"]))
+                key = (display_name, str(channel["channel"]))
                 entry = summary.setdefault(
                     key,
                     {
-                        "model": model_label,
+                        "model": display_name,
                         "channel": str(channel["channel"]),
                         "subsystem": str(channel.get("subsystem", "")),
                         "top3_count": 0.0,
@@ -275,19 +300,22 @@ def channel_summary_rows(
 
 def subsystem_summary_rows(
     artifact_dir: Path,
+    model_keys: Iterable[str] | None = None,
 ) -> list[dict[str, str | float]]:
     """Aggregate top-channel contribution mass by subsystem."""
 
     summary: dict[tuple[str, str], dict[str, str | float]] = {}
-    for model_key, model_label in MODEL_LABELS.items():
+    keys = list(model_keys) if model_keys is not None else list(MODEL_LABELS)
+    for model_key in keys:
+        display_name = model_label(model_key)
         for event in _load_json_array(artifact_dir / model_key / "events.json"):
             for channel in event.get("top_channels", [])[:5]:
                 subsystem = str(channel.get("subsystem", "UNKNOWN"))
-                key = (model_label, subsystem)
+                key = (display_name, subsystem)
                 entry = summary.setdefault(
                     key,
                     {
-                        "model": model_label,
+                        "model": display_name,
                         "subsystem": subsystem,
                         "total_contribution": 0.0,
                         "channel_mentions": 0.0,
