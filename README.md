@@ -180,6 +180,8 @@ Run only the temporal model or all current baselines:
 ```powershell
 python experiments/run_synthetic_models.py --models tcn_autoencoder
 python experiments/run_synthetic_models.py --models pca dense_autoencoder tcn_autoencoder
+python experiments/run_synthetic_models.py --models tcn_autoencoder --calibration constrained_event_f1
+python experiments/run_synthetic_models.py --models tcn_autoencoder --calibration constrained_event_f1 --score-transform log1p
 ```
 
 ## How To Run Multi-Seed Experiment
@@ -190,6 +192,7 @@ by model variant:
 ```powershell
 python experiments/run_multiseed_synthetic.py --seeds 1 2 3 4 5
 python experiments/run_multiseed_synthetic.py --seeds 1 2 3 --models pca dense_autoencoder tcn_autoencoder
+python experiments/run_multiseed_synthetic.py --seeds 1 2 3 --models pca dense_autoencoder tcn_autoencoder --calibration constrained_event_f1
 ```
 
 Each seed is written under `artifacts/multiseed/seed_NNN/`.
@@ -209,6 +212,11 @@ artifacts/synthetic_models/
 |   |-- predictions.csv
 |   |-- event_diagnostics.csv
 |   |-- false_positive_diagnostics.csv
+|   |-- diagnostics/
+|   |   |-- score_distribution.json
+|   |   |-- false_positive_context.json
+|   |   |-- filter_sweep.csv
+|   |   `-- anomaly_type_performance.csv
 |   |-- reports/
 |   |-- xai/
 |   `-- plots/
@@ -257,6 +265,31 @@ The TCN is opt-in so routine PCA/Dense AE runs retain their previous runtime:
 python experiments/run_synthetic_models.py --models tcn_autoencoder
 ```
 
+## SAK-v2.3 Temporal Calibration
+
+Temporal reconstruction scores have a different distribution from PCA and
+Dense AE scores, so one fixed quantile and alarm filter need not be equally
+appropriate for every model family. SAK-v2.3 adds optional TCN score
+transforms (`none`, `log1p`, `robust_zscore`), validation-only threshold and
+filter selection, and richer false-positive diagnostics.
+
+`constrained_event_f1` evaluates configured quantile, EWMA, persistence and
+merge candidates on validation data. It first enforces minimum event recall
+and maximum false alarms/day, then ranks feasible candidates by event F1,
+delay, false alarms and point F1. The current synthetic validation partition
+is intentionally nominal, so event recall cannot be estimated there. Such
+runs are marked `constraints_satisfied: false` and
+`selection_reason: no_validation_events`; test metrics are never used for
+selection.
+
+`robust_zscore` is fitted only on nominal validation scores. Per-variant
+diagnostics expose score distributions, threshold margins, false-positive
+operational context, filter-sweep results and anomaly-type performance.
+`likely_reason` values are diagnostic hints rather than root-cause claims.
+
+GNN/GAT remains deferred until temporal calibration is validated with
+representative anomalous validation events.
+
 ## Temporal Windowing
 
 `sak.features.windowing.build_windows` prepares data for temporal models:
@@ -298,4 +331,6 @@ trusted non-graph baselines instead of adding model complexity before the
 evaluation system is ready.
 
 The temporal experiment design is documented in
-[Experiment 002](docs/experiment-002-temporal-autoencoder.md).
+[Experiment 002](docs/experiment-002-temporal-autoencoder.md). Calibration
+and false-alarm suppression are documented in
+[Experiment 003](docs/experiment-003-temporal-calibration.md).

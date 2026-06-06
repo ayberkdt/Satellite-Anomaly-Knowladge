@@ -39,6 +39,16 @@ def main() -> None:
         choices=("pca", "dense_autoencoder", "tcn_autoencoder"),
         help="Optional model list; defaults to PCA and Dense Autoencoder.",
     )
+    parser.add_argument(
+        "--calibration",
+        choices=("quantile", "constrained_event_f1"),
+        help="Override threshold_selection.strategy from the config.",
+    )
+    parser.add_argument(
+        "--score-transform",
+        choices=("none", "log1p", "robust_zscore"),
+        help="Override temporal_calibration.score_transform from the config.",
+    )
     arguments = parser.parse_args()
     aggregate = run_multiseed_synthetic(
         config_path=arguments.config,
@@ -46,6 +56,8 @@ def main() -> None:
         seeds=arguments.seeds,
         models=arguments.models,
         render_dashboards=arguments.render_dashboards,
+        threshold_selection_strategy=arguments.calibration,
+        temporal_score_transform=arguments.score_transform,
     )
     print(json.dumps(aggregate, indent=2))
 

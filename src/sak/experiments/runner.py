@@ -12,11 +12,14 @@ import pandas as pd
 import yaml
 
 from sak.anomaly import (
-    EarlyWarningFilter,
-    ModeAwareThresholdFilter,
+    ScoreCalibrator,
     build_detected_events,
-    calibrate_mode_thresholds,
-    ewma_smooth,
+)
+from sak.anomaly.score_diagnostics import (
+    context_distribution,
+    false_positive_score_context,
+    score_distribution_summary,
+    threshold_margin_summary,
 )
 from sak.contracts import AlarmEvent, ExplanationResult
 from sak.evaluation import event_metrics, point_metrics
@@ -27,8 +30,13 @@ from sak.experiments.artifacts import (
     write_csv,
     write_json,
 )
+from sak.experiments.alarm_selection import (
+    apply_alarm_selection,
+    select_alarm_configuration,
+)
 from sak.experiments.comparison import write_comparison_artifacts
 from sak.experiments.diagnostics import (
+    build_anomaly_type_performance_rows,
     build_event_diagnostic_rows,
     build_false_positive_rows,
 )
@@ -82,6 +90,8 @@ class ThresholdEvaluation:
     event_result: dict[str, Any]
     threshold_metadata: dict[str, Any]
     threshold_sweep: list[dict[str, Any]]
+    calibration_metadata: dict[str, Any]
+    filter_sweep: list[dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -160,77 +170,6 @@ def _evaluate_warning(
     return detected_events, point_result, event_result
 
 
-def _threshold_sweep(
-    *,
-    strategy: str,
-    validation_smoothed: np.ndarray,
-    validation_frame: pd.DataFrame,
-    test_scores: np.ndarray,
-    test_frame: pd.DataFrame,
-    true_events: tuple[Any, ...],
-    settings: dict[str, Any],
-) -> list[dict[str, Any]]:
-    early_warning = settings["early_warning"]
-    alpha = float(early_warning["ewma_alpha"])
-    minimum_hits = int(early_warning["minimum_hits"])
-    lookback_steps = int(early_warning["lookback_steps"])
-    merge_gap_steps = int(early_warning["merge_gap_steps"])
-    context_column = str(
-        early_warning.get("mode_context_column", "operational_mode")
-    )
-    minimum_samples = int(early_warning.get("mode_minimum_samples", 1))
-    rows: list[dict[str, Any]] = []
-    for raw_quantile in early_warning["threshold_sweep_quantiles"]:
-        quantile = float(raw_quantile)
-        if strategy == "global":
-            threshold = float(np.quantile(validation_smoothed, quantile))
-            warning = EarlyWarningFilter(
-                threshold=threshold,
-                ewma_alpha=alpha,
-                minimum_hits=minimum_hits,
-                lookback_steps=lookback_steps,
-            ).apply(test_scores)
-            metadata: dict[str, Any] = {}
-        else:
-            calibration = calibrate_mode_thresholds(
-                validation_smoothed,
-                validation_frame,
-                quantile=quantile,
-                context_column=context_column,
-                minimum_samples=minimum_samples,
-            )
-            warning = ModeAwareThresholdFilter(
-                calibration=calibration,
-                ewma_alpha=alpha,
-                minimum_hits=minimum_hits,
-                lookback_steps=lookback_steps,
-            ).apply(test_scores, test_frame)
-            threshold = calibration.global_threshold
-            metadata = {"mode_thresholds": calibration.to_dict()["mode_thresholds"]}
-        _, _, event_result = _evaluate_warning(
-            test_frame=test_frame,
-            true_events=true_events,
-            smoothed_scores=warning.smoothed_scores,
-            alarm_mask=warning.alarm_mask,
-            merge_gap_steps=merge_gap_steps,
-        )
-        rows.append(
-            {
-                "quantile": quantile,
-                "threshold": threshold,
-                "event_precision": event_result["precision"],
-                "event_recall": event_result["recall"],
-                "event_f1": event_result["f1"],
-                "false_alarms_per_day": event_result["false_alarms_per_day"],
-                "median_detection_delay_minutes": event_result[
-                    "median_detection_delay_minutes"
-                ],
-                **metadata,
-            }
-        )
-    return rows
-
-
 def _build_threshold_evaluations(
     *,
     validation_scores: np.ndarray,
@@ -239,93 +178,83 @@ def _build_threshold_evaluations(
     test_frame: pd.DataFrame,
     true_events: tuple[Any, ...],
     settings: dict[str, Any],
+    score_calibration: dict[str, Any],
 ) -> tuple[ThresholdEvaluation, ThresholdEvaluation]:
-    early_warning = settings["early_warning"]
-    alpha = float(early_warning["ewma_alpha"])
-    quantile = float(early_warning["threshold_quantile"])
-    minimum_hits = int(early_warning["minimum_hits"])
-    lookback_steps = int(early_warning["lookback_steps"])
-    merge_gap_steps = int(early_warning["merge_gap_steps"])
-    validation_smoothed = ewma_smooth(validation_scores, alpha)
-
-    global_threshold = float(np.quantile(validation_smoothed, quantile))
-    global_warning = EarlyWarningFilter(
-        threshold=global_threshold,
-        ewma_alpha=alpha,
-        minimum_hits=minimum_hits,
-        lookback_steps=lookback_steps,
-    ).apply(test_scores)
+    global_selection = select_alarm_configuration(
+        validation_scores=validation_scores,
+        validation_frame=validation_frame,
+        threshold_mode="global",
+        settings=settings,
+    )
+    global_warning = apply_alarm_selection(
+        selection=global_selection,
+        validation_scores=validation_scores,
+        validation_frame=validation_frame,
+        test_scores=test_scores,
+        test_frame=test_frame,
+        settings=settings,
+    )
     global_events, global_point, global_event = _evaluate_warning(
         test_frame=test_frame,
         true_events=true_events,
         smoothed_scores=global_warning.smoothed_scores,
         alarm_mask=global_warning.alarm_mask,
-        merge_gap_steps=merge_gap_steps,
+        merge_gap_steps=global_selection.merge_gap_steps,
     )
     global_evaluation = ThresholdEvaluation(
         strategy="global",
-        threshold=global_threshold,
-        thresholds=np.full(len(test_scores), global_threshold, dtype=float),
+        threshold=global_warning.threshold,
+        thresholds=global_warning.thresholds,
         smoothed_scores=global_warning.smoothed_scores,
         alarm_mask=global_warning.alarm_mask,
         detected_events=global_events,
         point_result=global_point,
         event_result=global_event,
-        threshold_metadata={"strategy": "global", "quantile": quantile},
-        threshold_sweep=_threshold_sweep(
-            strategy="global",
-            validation_smoothed=validation_smoothed,
-            validation_frame=validation_frame,
-            test_scores=test_scores,
-            test_frame=test_frame,
-            true_events=true_events,
-            settings=settings,
-        ),
+        threshold_metadata=global_warning.threshold_metadata,
+        threshold_sweep=global_selection.sweep_rows,
+        calibration_metadata={
+            **score_calibration,
+            **global_selection.to_metadata(),
+        },
+        filter_sweep=global_selection.sweep_rows,
     )
-
-    context_column = str(
-        early_warning.get("mode_context_column", "operational_mode")
+    mode_selection = select_alarm_configuration(
+        validation_scores=validation_scores,
+        validation_frame=validation_frame,
+        threshold_mode="mode_aware",
+        settings=settings,
     )
-    minimum_samples = int(early_warning.get("mode_minimum_samples", 1))
-    calibration = calibrate_mode_thresholds(
-        validation_smoothed,
-        validation_frame,
-        quantile=quantile,
-        context_column=context_column,
-        minimum_samples=minimum_samples,
+    mode_warning = apply_alarm_selection(
+        selection=mode_selection,
+        validation_scores=validation_scores,
+        validation_frame=validation_frame,
+        test_scores=test_scores,
+        test_frame=test_frame,
+        settings=settings,
     )
-    mode_warning = ModeAwareThresholdFilter(
-        calibration=calibration,
-        ewma_alpha=alpha,
-        minimum_hits=minimum_hits,
-        lookback_steps=lookback_steps,
-    ).apply(test_scores, test_frame)
     mode_events, mode_point, mode_event = _evaluate_warning(
         test_frame=test_frame,
         true_events=true_events,
         smoothed_scores=mode_warning.smoothed_scores,
         alarm_mask=mode_warning.alarm_mask,
-        merge_gap_steps=merge_gap_steps,
+        merge_gap_steps=mode_selection.merge_gap_steps,
     )
     mode_evaluation = ThresholdEvaluation(
         strategy="mode_aware",
-        threshold=calibration.global_threshold,
+        threshold=mode_warning.threshold,
         thresholds=mode_warning.thresholds,
         smoothed_scores=mode_warning.smoothed_scores,
         alarm_mask=mode_warning.alarm_mask,
         detected_events=mode_events,
         point_result=mode_point,
         event_result=mode_event,
-        threshold_metadata={"strategy": "mode_aware", **calibration.to_dict()},
-        threshold_sweep=_threshold_sweep(
-            strategy="mode_aware",
-            validation_smoothed=validation_smoothed,
-            validation_frame=validation_frame,
-            test_scores=test_scores,
-            test_frame=test_frame,
-            true_events=true_events,
-            settings=settings,
-        ),
+        threshold_metadata=mode_warning.threshold_metadata,
+        threshold_sweep=mode_selection.sweep_rows,
+        calibration_metadata={
+            **score_calibration,
+            **mode_selection.to_metadata(),
+        },
+        filter_sweep=mode_selection.sweep_rows,
     )
     return global_evaluation, mode_evaluation
 
@@ -497,7 +426,7 @@ def _write_reports(
             model_variant=model_variant,
             threshold_strategy=evaluation.strategy,
             source_event_id=source_ids.get(detected.event_id),
-            metadata={"dataset": "synthetic", "seed": seed, "version": "SAK-v2.2"},
+            metadata={"dataset": "synthetic", "seed": seed, "version": "SAK-v2.3"},
         )
         markdown = render_early_warning_report_payload(report_payload)
         for report_dir in (paths.reports, generated_variant_dir):
@@ -517,6 +446,8 @@ def _write_reports(
                 "threshold": event_threshold,
                 "risk_level": alarm_event.risk_level,
                 "context": alarm_event.context,
+                "critical_window_start": explanation.critical_start.isoformat(),
+                "critical_window_end": explanation.critical_end.isoformat(),
                 "top_channels": report_payload["top_channels"],
                 "top_subsystems": report_payload["possible_subsystems"],
             }
@@ -588,6 +519,28 @@ def _model_metadata(model: Any) -> dict[str, Any]:
             "num_layers": model.config.num_layers,
         }
     return {}
+
+
+def _calibrate_model_scores(
+    *,
+    validation_scores: np.ndarray,
+    test_scores: np.ndarray,
+    validation_frame: pd.DataFrame,
+    method: str,
+) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    """Fit score calibration on nominal validation rows and transform test."""
+
+    nominal_mask = ~validation_frame["is_anomaly"].to_numpy(dtype=bool)
+    calibrator = ScoreCalibrator(method=cast(Any, method)).fit(
+        validation_scores[nominal_mask]
+    )
+    metadata = calibrator.to_dict()
+    metadata["score_transform"] = method
+    return (
+        calibrator.transform(validation_scores),
+        calibrator.transform(test_scores),
+        metadata,
+    )
 
 
 def _save_model(model: Any, paths: VariantArtifactPaths) -> None:
@@ -669,9 +622,65 @@ def _write_variant(
         model_variant=model_variant,
         event_metrics=evaluation.event_result,
         predicted_events=serialized_events,
+        frame=test_frame,
+        true_events=truth_payload,
+    )
+    anomaly_type_rows = build_anomaly_type_performance_rows(
+        model_variant=model_variant,
+        truth_events=truth_payload,
+        event_metrics=evaluation.event_result,
+        predicted_events=serialized_events,
     )
     write_csv(paths.root / "event_diagnostics.csv", diagnostic_rows)
     write_csv(paths.root / "false_positive_diagnostics.csv", false_positive_rows)
+    write_csv(paths.diagnostics / "filter_sweep.csv", evaluation.filter_sweep)
+    write_csv(
+        paths.diagnostics / "anomaly_type_performance.csv",
+        anomaly_type_rows,
+    )
+    false_positive_points = false_positive_score_context(
+        scores=test_scores,
+        smoothed_scores=evaluation.smoothed_scores,
+        thresholds=evaluation.thresholds,
+        alarm_mask=evaluation.alarm_mask,
+        timestamps=test_frame.index,
+        frame=test_frame,
+    )
+    write_json(
+        paths.diagnostics / "score_distribution.json",
+        {
+            "raw_scores": score_distribution_summary(
+                test_scores,
+                test_frame["is_anomaly"].to_numpy(dtype=bool),
+            ),
+            "smoothed_scores": score_distribution_summary(
+                evaluation.smoothed_scores,
+                test_frame["is_anomaly"].to_numpy(dtype=bool),
+            ),
+            "threshold_margin": threshold_margin_summary(
+                evaluation.smoothed_scores,
+                evaluation.thresholds,
+                evaluation.alarm_mask,
+            ),
+            "false_positive_count": len(false_positive_points),
+            "false_positive_context_distribution": context_distribution(
+                false_positive_points
+            ),
+        },
+    )
+    write_json(
+        paths.diagnostics / "false_positive_context.json",
+        {
+            "diagnostic_note": (
+                "likely_reason values are heuristic diagnostic hints, not "
+                "root-cause claims."
+            ),
+            "false_positive_count": len(false_positive_points),
+            "context_distribution": context_distribution(false_positive_points),
+            "points": false_positive_points,
+            "events": false_positive_rows,
+        },
+    )
     plot_score_timeline(
         timestamps=test_frame.index,
         raw_scores=test_scores,
@@ -706,6 +715,7 @@ def _write_variant(
         "event_metrics": evaluation.event_result,
         "xai_metrics": xai_result,
         "threshold_sweep": evaluation.threshold_sweep,
+        "calibration": evaluation.calibration_metadata,
         "model": _model_metadata(model),
     }
     write_json(paths.root / "metrics.json", result)
@@ -734,6 +744,12 @@ def _evaluate_model(
     test_scores, channel_errors = model.score(test_values)
     if channel_errors is None:
         raise RuntimeError(f"{model_name} must provide channel reconstruction errors")
+    validation_scores, test_scores, score_calibration = _calibrate_model_scores(
+        validation_scores=validation_scores,
+        test_scores=test_scores,
+        validation_frame=validation_frame,
+        method="identity",
+    )
     evaluations = _build_threshold_evaluations(
         validation_scores=validation_scores,
         validation_frame=validation_frame,
@@ -741,6 +757,7 @@ def _evaluate_model(
         test_frame=test_frame,
         true_events=true_events,
         settings=settings,
+        score_calibration=score_calibration,
     )
     results: dict[str, dict[str, Any]] = {}
     for evaluation in evaluations:
@@ -874,7 +891,18 @@ def _evaluate_temporal_model(
     test_window_scores, test_window_errors = model.score_windows(
         test_windows.X_windows
     )
-    aggregation = str(temporal_settings.get("aggregation", "mean"))
+    temporal_calibration = settings.get("temporal_calibration", {})
+    calibration_enabled = bool(temporal_calibration.get("enabled", False))
+    aggregation = (
+        str(
+            temporal_calibration.get(
+                "aggregation",
+                temporal_settings.get("aggregation", "mean"),
+            )
+        )
+        if calibration_enabled
+        else str(temporal_settings.get("aggregation", "mean"))
+    )
     validation_scores, _ = aggregate_window_errors_to_timestamps(
         source_indices=validation_windows.source_indices,
         window_channel_errors=validation_window_errors,
@@ -887,6 +915,48 @@ def _evaluate_temporal_model(
         n_samples=len(test_values),
         aggregation=cast(Aggregation, aggregation),
     )
+    covered_validation = np.zeros(len(validation_scores), dtype=bool)
+    covered_validation[np.unique(validation_windows.source_indices)] = True
+    covered_test = np.zeros(len(test_scores), dtype=bool)
+    covered_test[np.unique(test_windows.source_indices)] = True
+    edge_trim_steps = int(temporal_calibration.get("edge_trim_steps", 0))
+    if edge_trim_steps < 0:
+        raise ValueError("temporal_calibration.edge_trim_steps cannot be negative")
+    if edge_trim_steps:
+        covered_validation[:edge_trim_steps] = False
+        covered_validation[-edge_trim_steps:] = False
+        covered_test[:edge_trim_steps] = False
+        covered_test[-edge_trim_steps:] = False
+    suppress_uncovered_edges = calibration_enabled and bool(
+        temporal_calibration.get("suppress_uncovered_edges", True)
+    )
+    if suppress_uncovered_edges:
+        nominal_mask = ~validation_frame["is_anomaly"].to_numpy(dtype=bool)
+        reference_mask = covered_validation & nominal_mask
+        if not reference_mask.any():
+            raise ValueError("no covered nominal validation scores for edge suppression")
+        neutral_score = float(np.median(validation_scores[reference_mask]))
+        validation_scores[~covered_validation] = neutral_score
+        test_scores[~covered_test] = neutral_score
+    score_transform = (
+        str(temporal_calibration.get("score_transform", "none"))
+        if calibration_enabled
+        else "none"
+    )
+    validation_scores, test_scores, score_calibration = _calibrate_model_scores(
+        validation_scores=validation_scores,
+        test_scores=test_scores,
+        validation_frame=validation_frame,
+        method=score_transform,
+    )
+    score_calibration.update(
+        {
+            "enabled": calibration_enabled,
+            "aggregation": aggregation,
+            "suppress_uncovered_edges": suppress_uncovered_edges,
+            "edge_trim_steps": edge_trim_steps,
+        }
+    )
     evaluations = _build_threshold_evaluations(
         validation_scores=validation_scores,
         validation_frame=validation_frame,
@@ -894,6 +964,7 @@ def _evaluate_temporal_model(
         test_frame=test_frame,
         true_events=true_events,
         settings=settings,
+        score_calibration=score_calibration,
     )
     temporal_artifacts = TemporalArtifacts(
         source_indices=test_windows.source_indices,
@@ -944,13 +1015,42 @@ def run_synthetic_experiment(
     data_output_dir: Path | None = None,
     dashboard_path: Path | None = None,
     render_dashboard: bool = True,
+    threshold_selection_strategy: str | None = None,
+    temporal_score_transform: str | None = None,
 ) -> dict[str, Any]:
-    """Run one deterministic synthetic experiment and write SAK-v2.2 artefacts."""
+    """Run one deterministic synthetic experiment and write SAK-v2.3 artefacts."""
 
     config_path = config_path.resolve()
     repository_dir = config_path.parent.parent
     output_dir = output_dir.resolve()
     settings = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    if threshold_selection_strategy is not None:
+        if threshold_selection_strategy not in {
+            "quantile",
+            "constrained_event_f1",
+        }:
+            raise ValueError(
+                "threshold_selection_strategy must be quantile or "
+                "constrained_event_f1"
+            )
+        settings.setdefault("threshold_selection", {})["strategy"] = (
+            threshold_selection_strategy
+        )
+    if temporal_score_transform is not None:
+        if temporal_score_transform not in {
+            "none",
+            "log1p",
+            "robust_zscore",
+        }:
+            raise ValueError(
+                "temporal_score_transform must be none, log1p or robust_zscore"
+            )
+        settings.setdefault("temporal_calibration", {}).update(
+            {
+                "enabled": True,
+                "score_transform": temporal_score_transform,
+            }
+        )
     run_seed = int(seed if seed is not None else settings["project"]["seed"])
     settings["project"]["seed"] = run_seed
     requested_models = tuple(models or ("pca", "dense_autoencoder"))

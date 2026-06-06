@@ -66,6 +66,16 @@ def test_temporal_model_runs_through_shared_pipeline(tmp_path: Path) -> None:
         variant_dir = output_dir / variant
         assert (variant_dir / "model.pt").exists()
         assert (variant_dir / "metrics.json").exists()
+        assert (
+            variant_dir / "diagnostics" / "score_distribution.json"
+        ).exists()
+        assert (
+            variant_dir / "diagnostics" / "false_positive_context.json"
+        ).exists()
+        assert (variant_dir / "diagnostics" / "filter_sweep.csv").exists()
+        assert (
+            variant_dir / "diagnostics" / "anomaly_type_performance.csv"
+        ).exists()
         assert (variant_dir / "xai" / "explanations.json").exists()
         assert (variant_dir / "xai" / "temporal_error_summary.json").exists()
         assert (

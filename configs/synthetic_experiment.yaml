@@ -56,6 +56,42 @@ early_warning:
   lookback_steps: 5
   merge_gap_steps: 10
 
+threshold_selection:
+  strategy: quantile
+  candidate_quantiles:
+    - 0.990
+    - 0.992
+    - 0.995
+    - 0.997
+    - 0.999
+    - 0.9995
+  minimum_event_recall: 0.90
+  maximum_false_alarms_per_day: 0.50
+  tie_breaker: lower_delay
+
+temporal_calibration:
+  enabled: true
+  score_transform: none
+  aggregation: mean
+  suppress_uncovered_edges: true
+  edge_trim_steps: 0
+
+alarm_filter_sweep:
+  enabled: true
+  ewma_alpha:
+    - 0.10
+    - 0.20
+    - 0.30
+  minimum_hits:
+    - 2
+    - 3
+    - 4
+  lookback_steps:
+    - 5
+    - 7
+  merge_gap_steps:
+    - 10
+
 explainability:
   top_k_channels: 5
   subsystem_mapping: configs/subsystems.yaml

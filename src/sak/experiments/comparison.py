@@ -18,9 +18,20 @@ def comparison_rows(comparison: dict[str, Any]) -> list[dict[str, Any]]:
         point = payload.get("point_metrics", {})
         event = payload.get("event_metrics", {})
         xai = payload.get("xai_metrics", {})
+        calibration = payload.get("calibration", {})
         rows.append(
             {
                 "model_variant": model_variant,
+                "threshold_strategy": payload.get("thresholding", {}).get(
+                    "strategy", ""
+                ),
+                "calibration_strategy": calibration.get(
+                    "threshold_selection_strategy", ""
+                ),
+                "score_transform": calibration.get("score_transform", ""),
+                "constraints_satisfied": calibration.get(
+                    "constraints_satisfied", False
+                ),
                 "point_precision": point.get("precision", 0.0),
                 "point_recall": point.get("recall", 0.0),
                 "point_f1": point.get("f1", 0.0),

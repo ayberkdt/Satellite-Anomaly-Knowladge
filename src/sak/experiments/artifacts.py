@@ -32,6 +32,7 @@ class VariantArtifactPaths:
     reports: Path
     xai: Path
     plots: Path
+    diagnostics: Path
 
 
 def create_variant_artifact_paths(
@@ -46,8 +47,15 @@ def create_variant_artifact_paths(
         reports=root / "reports",
         xai=root / "xai",
         plots=root / "plots",
+        diagnostics=root / "diagnostics",
     )
-    for path in (paths.root, paths.reports, paths.xai, paths.plots):
+    for path in (
+        paths.root,
+        paths.reports,
+        paths.xai,
+        paths.plots,
+        paths.diagnostics,
+    ):
         path.mkdir(parents=True, exist_ok=True)
     return paths
 

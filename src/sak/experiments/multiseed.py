@@ -79,6 +79,8 @@ def run_multiseed_synthetic(
     seeds: list[int],
     models: Sequence[str] | None = None,
     render_dashboards: bool = False,
+    threshold_selection_strategy: str | None = None,
+    temporal_score_transform: str | None = None,
 ) -> list[dict[str, Any]]:
     """Run isolated synthetic experiments and write aggregate CSV and JSON."""
 
@@ -100,6 +102,8 @@ def run_multiseed_synthetic(
             data_output_dir=seed_dir / "data" / "synthetic",
             dashboard_path=seed_dir / "dashboard.html",
             render_dashboard=render_dashboards,
+            threshold_selection_strategy=threshold_selection_strategy,
+            temporal_score_transform=temporal_score_transform,
         )
         results.append((seed, comparison))
 

@@ -23,6 +23,8 @@ def run(
     *,
     seed: int | None = None,
     models: Sequence[str] | None = None,
+    calibration: str | None = None,
+    score_transform: str | None = None,
 ) -> dict[str, Any]:
     """Preserve the original experiment entry point."""
 
@@ -31,6 +33,8 @@ def run(
         output_dir,
         seed=seed,
         models=models,
+        threshold_selection_strategy=calibration,
+        temporal_score_transform=score_transform,
     )
 
 
@@ -52,12 +56,24 @@ def main() -> None:
         nargs="+",
         choices=("pca", "dense_autoencoder", "tcn_autoencoder"),
     )
+    parser.add_argument(
+        "--calibration",
+        choices=("quantile", "constrained_event_f1"),
+        help="Override threshold_selection.strategy from the config.",
+    )
+    parser.add_argument(
+        "--score-transform",
+        choices=("none", "log1p", "robust_zscore"),
+        help="Override temporal_calibration.score_transform from the config.",
+    )
     arguments = parser.parse_args()
     summary = run(
         arguments.config,
         arguments.output,
         seed=arguments.seed,
         models=arguments.models,
+        calibration=arguments.calibration,
+        score_transform=arguments.score_transform,
     )
     concise = {
         model_variant: {

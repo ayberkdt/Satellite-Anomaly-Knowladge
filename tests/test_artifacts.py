@@ -18,6 +18,7 @@ def test_model_variant_path_uses_comparison_key(tmp_path: Path) -> None:
     assert paths.reports.is_dir()
     assert paths.xai.is_dir()
     assert paths.plots.is_dir()
+    assert paths.diagnostics.is_dir()
 
 
 def test_comparison_json_and_csv_use_same_model_keys(tmp_path: Path) -> None:
