@@ -25,6 +25,7 @@ def select_threshold_candidate(
     *,
     minimum_event_recall: float,
     minimum_critical_recall: float = 0.0,
+    minimum_before_critical_rate: float = 0.0,
     maximum_false_alarms_per_day: float,
 ) -> ThresholdSelectionResult:
     """Select a calibration operating point under event/critical constraints."""
@@ -37,6 +38,8 @@ def select_threshold_candidate(
         if _metric(candidate, "event_recall", 0.0) >= minimum_event_recall
         and _metric(candidate, "critical_region_recall", 0.0)
         >= minimum_critical_recall
+        and _metric(candidate, "detected_before_critical_rate", 0.0)
+        >= minimum_before_critical_rate
         and _metric(candidate, "false_alarms_per_day", float("inf"))
         <= maximum_false_alarms_per_day
     ]
@@ -46,6 +49,7 @@ def select_threshold_candidate(
             key=lambda candidate: (
                 -_metric(candidate, "event_f1", 0.0),
                 -_metric(candidate, "critical_region_recall", 0.0),
+                -_metric(candidate, "detected_before_critical_rate", 0.0),
                 -_metric(
                     candidate,
                     "median_lead_time_to_critical_minutes",
@@ -72,7 +76,13 @@ def select_threshold_candidate(
         key=lambda candidate: (
             -_metric(candidate, "event_recall", 0.0),
             -_metric(candidate, "critical_region_recall", 0.0),
+            -_metric(candidate, "detected_before_critical_rate", 0.0),
             _metric(candidate, "false_alarms_per_day", float("inf")),
+            -_metric(
+                candidate,
+                "median_lead_time_to_critical_minutes",
+                float("-inf"),
+            ),
             -_metric(candidate, "event_f1", 0.0),
             _metric(
                 candidate,

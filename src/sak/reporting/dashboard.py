@@ -23,9 +23,23 @@ from sak.reporting.results import (
     write_csv,
     write_results_markdown,
 )
+from sak.visualization.theme import (
+    LABEL_TAXONOMY_COLORS,
+    MODEL_COLORS,
+    RISK_COLORS,
+    SUBSYSTEM_COLORS,
+    subsystem_color,
+    subsystem_label,
+)
 
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt  # noqa: E402
+
+DEFAULT_DASHBOARD_VARIANTS = (
+    "pca_global",
+    "dense_autoencoder_global",
+    "tcn_autoencoder_global",
+)
 
 
 def _fmt(value: Any, digits: int = 3) -> str:
@@ -53,6 +67,84 @@ def _html_table(rows: list[dict[str, str | float]], *, css_class: str = "") -> s
     return f"<table{class_attr}><thead><tr>{head}</tr></thead><tbody>{''.join(body)}</tbody></table>"
 
 
+def dashboard_variant_groups(
+    comparison: dict[str, Any],
+    default_variants: tuple[str, ...] = DEFAULT_DASHBOARD_VARIANTS,
+) -> dict[str, list[str]]:
+    """Split current operating points from advanced/legacy variants."""
+
+    model_keys = [key for key in comparison if key != "dataset"]
+    default = [key for key in default_variants if key in comparison]
+    advanced = [key for key in model_keys if key not in set(default)]
+    return {"default": default, "advanced": advanced}
+
+
+def _metric(payload: dict[str, Any], *path: str, default: float = 0.0) -> float:
+    value: Any = payload
+    for key in path:
+        if not isinstance(value, dict) or key not in value:
+            return default
+        value = value[key]
+    return float(value) if value is not None else default
+
+
+def _operational_score(model_key: str, payload: dict[str, Any]) -> float:
+    """Rank dashboard cards only; this is not a model-selection metric."""
+
+    event = payload.get("event_metrics", {})
+    xai = payload.get("xai_metrics", {})
+    false_alarms = _metric(payload, "event_metrics", "false_alarms_per_day")
+    lead = _metric(payload, "event_metrics", "median_lead_time_to_critical_minutes")
+    normalized_fa = max(0.0, 1.0 - min(false_alarms, 5.0) / 5.0)
+    normalized_lead = max(-1.0, min(lead / 60.0, 1.0))
+    return (
+        0.24 * float(event.get("recall", 0.0))
+        + 0.22 * float(event.get("critical_region_recall", 0.0))
+        + 0.18 * float(event.get("detected_before_critical_rate", 0.0))
+        + 0.14 * normalized_fa
+        + 0.12 * normalized_lead
+        + 0.10 * float(xai.get("channel_hit_at_3", 0.0))
+        + (0.001 if model_key == "tcn_autoencoder_global" else 0.0)
+    )
+
+
+def _filter_rows_by_models(
+    rows: list[dict[str, str | float]],
+    model_labels: set[str],
+) -> list[dict[str, str | float]]:
+    return [row for row in rows if str(row.get("model", "")) in model_labels]
+
+
+def _subsystem_badge(subsystem: object) -> str:
+    label = subsystem_label(subsystem)
+    color = subsystem_color(subsystem)
+    return (
+        f'<span class="subsystem-badge" style="background:{color}">'
+        f"{html.escape(label)}</span>"
+    )
+
+
+def _risk_badge(risk: object) -> str:
+    label = str(risk or "LOW").upper()
+    color = RISK_COLORS.get(label, RISK_COLORS["LOW"])
+    return f'<span class="risk-badge" style="background:{color}">{html.escape(label)}</span>'
+
+
+def _subsystem_legend() -> str:
+    items = [
+        f"<li>{_subsystem_badge(subsystem)}</li>"
+        for subsystem in SUBSYSTEM_COLORS
+    ]
+    return f'<ul class="legend">{"".join(items)}</ul>'
+
+
+def _warning_panel(warnings: list[str]) -> str:
+    if not warnings:
+        return "<!-- no dashboard warnings -->"
+    items = "".join(f"<li>{html.escape(warning)}</li>" for warning in warnings)
+    return f'<div class="panel warning"><h2>Data Contract Warnings</h2><ul>{items}</ul></div>'
+
+
 def _metric_card(title: str, value: str, note: str = "") -> str:
     return (
         f'<div class="card"><small>{html.escape(title)}</small>'
@@ -63,20 +155,42 @@ def _metric_card(title: str, value: str, note: str = "") -> str:
 
 def _plot_model_comparison(rows: list[dict[str, str | float]], output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    if not rows:
+        output_path.write_bytes(b"")
+        return
     labels = [str(row["model"]) for row in rows]
     metrics = [
-        ("event_f1", "Event F1"),
-        ("point_f1", "Point F1"),
+        ("event_recall", "Event Recall"),
+        ("critical_region_recall", "Critical Recall"),
+        ("detected_before_critical_rate", "Before Critical"),
+        ("inverse_false_alarms", "Low False Alarms"),
+        ("normalized_lead_time", "Lead Time"),
         ("channel_hit_at_3", "Channel Hit@3"),
-        ("subsystem_hit_at_2", "Subsystem Hit@2"),
     ]
     x = np.arange(len(labels))
-    width = 0.18
-    figure, axis = plt.subplots(figsize=(10, 5.2))
-    colors = ["#2f6f73", "#7a4fe0", "#f2a541", "#d1495b"]
+    width = 0.13
+    figure, axis = plt.subplots(figsize=(12, 5.4))
+    colors = ["#2563EB", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", "#0F766E"]
     for offset, (key, label) in enumerate(metrics):
-        values = [float(row[key]) for row in rows]
-        axis.bar(x + (offset - 1.5) * width, values, width, label=label, color=colors[offset])
+        if key == "inverse_false_alarms":
+            values = [
+                max(0.0, 1.0 - min(float(row["false_alarms_per_day"]), 5.0) / 5.0)
+                for row in rows
+            ]
+        elif key == "normalized_lead_time":
+            values = [
+                max(0.0, min(float(row["median_lead_time_to_critical_min"]) / 60.0, 1.0))
+                for row in rows
+            ]
+        else:
+            values = [float(row[key]) for row in rows]
+        axis.bar(
+            x + (offset - (len(metrics) - 1) / 2.0) * width,
+            values,
+            width,
+            label=label,
+            color=colors[offset],
+        )
     axis.set_ylim(0.0, 1.08)
     axis.set_xticks(x)
     axis.set_xticklabels(labels)
@@ -91,22 +205,30 @@ def _plot_model_comparison(rows: list[dict[str, str | float]], output_path: Path
 
 def _plot_false_alarm_delay(rows: list[dict[str, str | float]], output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    if not rows:
+        output_path.write_bytes(b"")
+        return
     labels = [str(row["model"]) for row in rows]
     false_alarms = [float(row["false_alarms_per_day"]) for row in rows]
-    delays = [float(row["median_delay_min"]) for row in rows]
+    lead_times = [float(row["median_lead_time_to_critical_min"]) for row in rows]
     x = np.arange(len(labels))
     figure, axes = plt.subplots(1, 2, figsize=(10, 4.8))
-    axes[0].bar(x, false_alarms, color="#d1495b")
+    axes[0].bar(x, false_alarms, color="#EF4444")
+    axes[0].axhline(0.75, color="#F59E0B", linestyle="--", linewidth=1.2, label="0.75/day")
+    axes[0].axhline(0.50, color="#10B981", linestyle="--", linewidth=1.2, label="0.50/day")
     axes[0].set_xticks(x)
     axes[0].set_xticklabels(labels, rotation=10)
     axes[0].set_ylabel("False alarms / day")
     axes[0].set_title("Operational Noise")
+    axes[0].legend()
     axes[0].grid(axis="y", alpha=0.2)
-    axes[1].bar(x, delays, color="#235789")
+    lead_colors = ["#10B981" if value >= 0.0 else "#EF4444" for value in lead_times]
+    axes[1].bar(x, lead_times, color=lead_colors)
+    axes[1].axhline(0.0, color="#111827", linewidth=0.8)
     axes[1].set_xticks(x)
     axes[1].set_xticklabels(labels, rotation=10)
-    axes[1].set_ylabel("Median delay (min)")
-    axes[1].set_title("Early Warning Delay")
+    axes[1].set_ylabel("Median lead time (min)")
+    axes[1].set_title("Lead Time to Critical")
     axes[1].grid(axis="y", alpha=0.2)
     figure.tight_layout()
     figure.savefig(output_path, dpi=160)
@@ -115,6 +237,9 @@ def _plot_false_alarm_delay(rows: list[dict[str, str | float]], output_path: Pat
 
 def _plot_threshold_sweep(rows: list[dict[str, str | float]], output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    if not rows:
+        output_path.write_bytes(b"")
+        return
     by_model: dict[str, list[dict[str, str | float]]] = {}
     for row in rows:
         by_model.setdefault(str(row["model"]), []).append(row)
@@ -128,11 +253,11 @@ def _plot_threshold_sweep(rows: list[dict[str, str | float]], output_path: Path)
         axes[0].plot(quantiles, f1_values, marker="o", label=model)
         axes[1].plot(quantiles, false_alarms, marker="o", label=model)
     axes[0].set_title("Event F1 vs Threshold Quantile")
-    axes[0].set_xlabel("Validation quantile")
+    axes[0].set_xlabel("Calibration quantile")
     axes[0].set_ylabel("Event F1")
     axes[0].set_ylim(0.0, 1.08)
     axes[1].set_title("False Alarms vs Threshold Quantile")
-    axes[1].set_xlabel("Validation quantile")
+    axes[1].set_xlabel("Calibration quantile")
     axes[1].set_ylabel("False alarms / day")
     for axis in axes:
         axis.grid(alpha=0.2)
@@ -236,9 +361,10 @@ def _plot_channel_summary(rows: list[dict[str, str | float]], output_path: Path)
     labels = [f"{row['channel']}\n{row['model']}" for row in top_rows]
     counts = [float(row["top3_count"]) for row in top_rows]
     contributions = [float(row["mean_contribution"]) for row in top_rows]
+    colors = [subsystem_color(row.get("subsystem", "UNKNOWN")) for row in top_rows]
     x = np.arange(len(top_rows))
     figure, axis = plt.subplots(figsize=(13, 5.2))
-    bars = axis.bar(x, counts, color="#235789")
+    bars = axis.bar(x, counts, color=colors)
     axis.set_xticks(x)
     axis.set_xticklabels(labels, rotation=35, ha="right")
     axis.set_ylabel("Top-3 mention count")
@@ -285,7 +411,15 @@ def _plot_subsystem_summary(rows: list[dict[str, str | float]], output_path: Pat
                 None,
             )
             values.append(float(match["total_contribution"]) if match else 0.0)
-        axis.bar(x + (model_index - 0.5) * width, values, width, label=model)
+        colors = [subsystem_color(subsystem) for subsystem in subsystems]
+        axis.bar(
+            x + (model_index - 0.5) * width,
+            values,
+            width,
+            label=model,
+            color=colors,
+            alpha=0.90 if model_index == 0 else 0.55,
+        )
     axis.set_xticks(x)
     axis.set_xticklabels(subsystems)
     axis.set_ylabel("Total top-5 contribution mass")
@@ -336,6 +470,85 @@ def _event_cards(events_by_model: dict[str, list[dict[str, Any]]]) -> str:
     return "\n".join(parts)
 
 
+def _load_events_themed(
+    artifact_dir: Path,
+    model_keys: list[str],
+    warnings: list[str],
+) -> dict[str, list[dict[str, Any]]]:
+    events: dict[str, list[dict[str, Any]]] = {}
+    for model_key in model_keys:
+        path = artifact_dir / model_key / "events.json"
+        if path.exists():
+            events[model_label(model_key)] = json.loads(
+                path.read_text(encoding="utf-8")
+            )
+        else:
+            warnings.append(f"Missing optional events artifact: {path}")
+    return events
+
+
+def _dominant_subsystem(event: dict[str, Any]) -> str:
+    totals: dict[str, float] = {}
+    for item in event.get("top_channels", []):
+        subsystem = str(item.get("subsystem", "UNKNOWN"))
+        totals[subsystem] = totals.get(subsystem, 0.0) + float(
+            item.get("contribution", 0.0)
+        )
+    return max(totals, key=totals.get) if totals else "UNKNOWN"
+
+
+def _channel_badge_list(items: list[dict[str, Any]]) -> str:
+    parts: list[str] = []
+    for item in items[:5]:
+        subsystem = str(item.get("subsystem", "UNKNOWN"))
+        contribution = float(item.get("contribution", 0.0))
+        percent = max(0.0, min(contribution * 100.0, 100.0))
+        parts.append(
+            f"""
+<li>
+  {_subsystem_badge(subsystem)}
+  <span class="channel-name">{html.escape(str(item.get("channel", "")))}</span>
+  <span class="bar"><i style="width:{percent:.1f}%;background:{subsystem_color(subsystem)}"></i></span>
+  <b>{percent:.0f}%</b>
+</li>
+"""
+        )
+    return f'<ul class="channel-list">{"".join(parts)}</ul>' if parts else "<p>Not available.</p>"
+
+
+def _event_cards_themed(
+    events_by_model: dict[str, list[dict[str, Any]]],
+    *,
+    max_cards: int = 20,
+) -> str:
+    parts: list[str] = []
+    emitted = 0
+    for model, events in events_by_model.items():
+        parts.append(f"<h3>{html.escape(model)} Events</h3>")
+        for event in events:
+            if emitted >= max_cards:
+                break
+            emitted += 1
+            dominant = _dominant_subsystem(event)
+            color = subsystem_color(dominant)
+            parts.append(
+                f"""
+<details class="event-card" style="border-left: 6px solid {color}">
+  <summary><strong>{html.escape(str(event.get("event_id", "")))}</strong>
+  {_risk_badge(event.get("risk_level", "LOW"))}
+  {_subsystem_badge(dominant)}
+  <small>{html.escape(str(event.get("peak_time", "")))}</small></summary>
+  <p><b>Interval:</b> {html.escape(str(event.get("start", "")))} - {html.escape(str(event.get("end", "")))}</p>
+  <p><b>Peak score:</b> {_fmt(float(event.get("peak_score", 0.0)), 4)}</p>
+  <p><b>Context:</b> {html.escape(str(event.get("context", {})))}</p>
+  <p><b>Top channels:</b></p>
+  {_channel_badge_list(event.get("top_channels", []))}
+</details>
+"""
+            )
+    return "\n".join(parts) if parts else "<p>No event cards available.</p>"
+
+
 def _top_takeaways(
     event_rows: list[dict[str, str | float]],
     false_positives: list[dict[str, str | float]],
@@ -364,23 +577,49 @@ def render_synthetic_dashboard(
     """Generate CSV tables, plots and a static HTML dashboard."""
 
     dashboard_artifacts = artifact_dir / "dashboard"
-    model_rows = experiment_model_rows(comparison)
+    warnings: list[str] = []
+    variant_groups = dashboard_variant_groups(comparison)
+    default_keys = variant_groups["default"]
+    advanced_keys = variant_groups["advanced"]
+    default_labels = {model_label(key) for key in default_keys}
+    default_comparison = {
+        "dataset": comparison.get("dataset", {}),
+        **{key: comparison[key] for key in default_keys},
+    }
+    advanced_comparison = {
+        "dataset": comparison.get("dataset", {}),
+        **{key: comparison[key] for key in advanced_keys},
+    }
+    model_rows = experiment_model_rows(default_comparison)
+    advanced_model_rows = experiment_model_rows(advanced_comparison)
+    all_model_rows = experiment_model_rows(comparison)
     sweep_rows = threshold_sweep_rows(comparison)
-    delays = delay_rows(comparison)
+    delays = delay_rows(default_comparison)
     model_keys = [key for key in comparison if key != "dataset"]
     resolved_manifest_path = manifest_path or Path(
         "data/synthetic/injection_manifest.json"
     )
+    if not resolved_manifest_path.exists():
+        warnings.append(f"Missing optional injection manifest: {resolved_manifest_path}")
     event_rows = event_diagnostic_rows(
-        comparison,
+        default_comparison,
         artifact_dir,
         resolved_manifest_path,
     )
-    false_positives = false_positive_rows(comparison, artifact_dir)
-    channel_rows = channel_summary_rows(artifact_dir, model_keys)
-    subsystem_rows = subsystem_summary_rows(artifact_dir, model_keys)
+    false_positives = false_positive_rows(default_comparison, artifact_dir)
+    channel_rows = channel_summary_rows(artifact_dir, default_keys)
+    subsystem_rows = subsystem_summary_rows(artifact_dir, default_keys)
+    advanced_event_rows = event_diagnostic_rows(
+        advanced_comparison,
+        artifact_dir,
+        resolved_manifest_path,
+    ) if advanced_keys else []
+    advanced_false_positives = (
+        false_positive_rows(advanced_comparison, artifact_dir) if advanced_keys else []
+    )
 
     write_csv(dashboard_artifacts / "model_comparison.csv", model_rows)
+    write_csv(dashboard_artifacts / "model_comparison_all.csv", all_model_rows)
     write_csv(dashboard_artifacts / "threshold_sweep.csv", sweep_rows)
     write_csv(dashboard_artifacts / "detection_delays.csv", delays)
     write_csv(dashboard_artifacts / "event_diagnostics.csv", event_rows)
@@ -405,9 +644,18 @@ def render_synthetic_dashboard(
     _plot_subsystem_summary(subsystem_rows, subsystem_plot)
 
     dataset = comparison["dataset"]
-    best_channel = max(model_rows, key=lambda row: float(row["channel_hit_at_3"]))
-    best_event = max(model_rows, key=lambda row: float(row["event_f1"]))
-    low_noise = min(model_rows, key=lambda row: float(row["false_alarms_per_day"]))
+    best_key = max(
+        default_keys or model_keys,
+        key=lambda key: _operational_score(key, comparison[key]),
+    )
+    best_payload = comparison[best_key]
+    best_label = model_label(best_key)
+    best_row = next(
+        row for row in all_model_rows if str(row["model"]) == best_label
+    )
+    best_channel = max(all_model_rows, key=lambda row: float(row["channel_hit_at_3"]))
+    best_event = max(all_model_rows, key=lambda row: float(row["event_f1"]))
+    low_noise = min(all_model_rows, key=lambda row: float(row["false_alarms_per_day"]))
     score_variant = (
         "pca_global"
         if "pca_global" in comparison
@@ -430,6 +678,8 @@ def render_synthetic_dashboard(
         pca_score = artifact_dir / score_variant / "score_timeline.png"
     if not ae_heatmap.exists():
         ae_heatmap = artifact_dir / heatmap_variant / "channel_error_heatmap.png"
+    default_events = _load_events_themed(artifact_dir, default_keys, warnings)
+    advanced_events = _load_events_themed(artifact_dir, advanced_keys, warnings)
 
     html_text = f"""<!doctype html>
 <html lang="tr">
@@ -449,6 +699,12 @@ def render_synthetic_dashboard(
       --green: #2f6f73;
       --amber: #f2a541;
       --red: #d1495b;
+      --eps: {SUBSYSTEM_COLORS["EPS"]};
+      --thermal: {SUBSYSTEM_COLORS["THERMAL"]};
+      --aocs: {SUBSYSTEM_COLORS["AOCS"]};
+      --comm: {SUBSYSTEM_COLORS["COMM"]};
+      --payload: {SUBSYSTEM_COLORS["PAYLOAD"]};
+      --unknown: {SUBSYSTEM_COLORS["UNKNOWN"]};
     }}
     * {{ box-sizing: border-box; }}
     body {{
@@ -497,7 +753,24 @@ def render_synthetic_dashboard(
     .two-col {{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }}
     .event-card {{ padding: 12px 14px; margin: 10px 0; border: 1px solid var(--line); border-radius: 14px; background: #fbfdff; }}
     .event-card summary {{ cursor: pointer; display: flex; align-items: center; gap: 12px; }}
-    .event-card span {{ color: white; background: var(--red); border-radius: 999px; padding: 3px 8px; font-size: 12px; }}
+    .subsystem-badge, .risk-badge {{
+      display: inline-block;
+      color: white;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .02em;
+    }}
+    .legend {{ display: flex; gap: 8px; flex-wrap: wrap; padding: 0; list-style: none; }}
+    .channel-list {{ list-style: none; padding: 0; margin: 8px 0; }}
+    .channel-list li {{ display: grid; grid-template-columns: 92px 1fr 130px 48px; gap: 10px; align-items: center; margin: 8px 0; }}
+    .channel-name {{ font-family: Consolas, monospace; }}
+    .bar {{ display: block; height: 9px; background: #e5e7eb; border-radius: 999px; overflow: hidden; }}
+    .bar i {{ display: block; height: 100%; border-radius: 999px; }}
+    .warning {{ border-color: #F59E0B; background: #FFFBEB; }}
+    details.advanced {{ margin: 18px 0; }}
+    details.advanced > summary {{ cursor: pointer; font-size: 18px; font-weight: 800; }}
     .takeaways {{ padding-left: 20px; line-height: 1.6; }}
     .artifact-list a {{ color: var(--blue); font-weight: 700; text-decoration: none; }}
     .artifact-list li {{ margin: 8px 0; }}
@@ -520,15 +793,31 @@ def render_synthetic_dashboard(
       <button class="tab-button" data-tab="models">Model Tables</button>
       <button class="tab-button" data-tab="events">Events & XAI</button>
       <button class="tab-button" data-tab="diagnostics">Diagnostics</button>
+      <button class="tab-button" data-tab="advanced">Advanced / Legacy</button>
       <button class="tab-button" data-tab="artifacts">Artifacts</button>
     </nav>
 
     <section id="overview" class="section active">
+      {_warning_panel(warnings)}
       <div class="grid">
         {_metric_card("Rows", f"{dataset['rows']:,}", "synthetic telemetry")}
         {_metric_card("Telemetry channels", str(dataset["channels"]), "scaled train-only")}
         {_metric_card("Test events", str(dataset["test_events"]), "controlled injections")}
         {_metric_card("Best XAI Hit@3", str(best_channel["model"]), "top channel attribution")}
+      </div>
+      <div class="panel">
+        <h2>SAK-v2.5 Executive Summary</h2>
+        <p><b>Best current operating point:</b> {html.escape(best_label)}.
+        Event recall {_fmt(float(best_row["event_recall"]))},
+        critical-region recall {_fmt(float(best_row["critical_region_recall"]))},
+        before-critical rate {_fmt(float(best_row["detected_before_critical_rate"]))},
+        false alarms/day {_fmt(float(best_row["false_alarms_per_day"]))},
+        median lead time {_fmt(float(best_row["median_lead_time_to_critical_min"]))} min,
+        Channel Hit@3 {_fmt(float(best_row["channel_hit_at_3"]))}.</p>
+        <p class="muted">Operational score is only used for dashboard ranking;
+        threshold/filter selection remains calibration-only.</p>
+        <h3>Subsystem Legend</h3>
+        {_subsystem_legend()}
       </div>
       <div class="panel">
         <h2>Executive Readout</h2>
@@ -558,7 +847,7 @@ def render_synthetic_dashboard(
         <div class="panel"><h2>Autoencoder Heatmap</h2><img src="{_relative(ae_heatmap, dashboard_path)}" alt="Autoencoder channel heatmap"></div>
       </div>
       <div class="panel"><h2>Event Diagnostics</h2><img src="{_relative(event_plot, dashboard_path)}" alt="Event diagnostics chart">{_html_table(event_rows)}</div>
-      <div class="panel"><h2>Predicted Events</h2>{_event_cards(_load_events(artifact_dir, model_keys))}</div>
+      <div class="panel"><h2>Predicted Events</h2>{_event_cards_themed(default_events, max_cards=20)}</div>
     </section>
 
     <section id="diagnostics" class="section">
@@ -569,6 +858,18 @@ def render_synthetic_dashboard(
       <div class="panel"><h2>False Positive Events</h2>{_html_table(false_positives)}</div>
       <div class="panel"><h2>Channel Summary Table</h2>{_html_table(channel_rows)}</div>
       <div class="panel"><h2>Subsystem Summary Table</h2>{_html_table(subsystem_rows)}</div>
+    </section>
+
+    <section id="advanced" class="section">
+      <details class="advanced" open>
+        <summary>Mode-aware, fixed-quantile and sweep diagnostics</summary>
+        <div class="panel"><h2>All Model Metrics</h2>{_html_table(all_model_rows)}</div>
+        <div class="panel"><h2>Advanced Model Metrics</h2>{_html_table(advanced_model_rows)}</div>
+        <div class="panel"><h2>Threshold / Filter Sweep</h2>{_html_table(sweep_rows)}</div>
+        <div class="panel"><h2>Advanced Event Diagnostics</h2>{_html_table(advanced_event_rows)}</div>
+        <div class="panel"><h2>Advanced False Positives</h2>{_html_table(advanced_false_positives)}</div>
+        <div class="panel"><h2>Advanced Predicted Events</h2>{_event_cards_themed(advanced_events, max_cards=20)}</div>
+      </details>
     </section>
 
     <section id="artifacts" class="section">

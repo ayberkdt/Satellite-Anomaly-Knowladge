@@ -1,6 +1,7 @@
 """Telemetry ingestion and dataset adapters."""
 
 from sak.data.adapters import (
+    AdapterDataNotFoundError,
     EsaAdbAdapter,
     NasaSmapMslAdapter,
     SyntheticTelemetryAdapter,
@@ -12,6 +13,7 @@ from sak.data.tabular import CsvParquetDataSource
 
 __all__ = [
     "CsvParquetDataSource",
+    "AdapterDataNotFoundError",
     "EsaAdbAdapter",
     "NasaSmapMslAdapter",
     "SyntheticTelemetryAdapter",

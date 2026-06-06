@@ -102,6 +102,7 @@ operating_point_selection:
   sanity_partition: validation
   minimum_event_recall: 0.90
   minimum_critical_recall: 0.90
+  minimum_before_critical_rate: 0.80
   maximum_false_alarms_per_day: 0.75
   prefer_lower_delay: true
   prefer_higher_lead_time: true
@@ -153,6 +154,18 @@ temporal_ablation:
   num_layers:
     - 2
     - 3
+
+dashboard:
+  default_variants:
+    - pca_global
+    - dense_autoencoder_global
+    - tcn_autoencoder_global
+  hide_legacy_by_default: true
+  show_mode_aware: advanced
+  show_fixed_quantile: advanced
+  show_ablation: advanced
+  max_event_cards: 20
+  sort_models_by: operational_score
 
 explainability:
   top_k_channels: 5

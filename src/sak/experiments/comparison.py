@@ -41,6 +41,14 @@ def comparison_rows(comparison: dict[str, Any]) -> list[dict[str, Any]]:
                 "critical_region_recall": event.get(
                     "critical_region_recall", 0.0
                 ),
+                "detected_before_critical_rate": event.get(
+                    "detected_before_critical_rate", 0.0
+                ),
+                "late_detection_rate": event.get("late_detection_rate", 0.0),
+                "p10_lead_time_to_critical_minutes": event.get(
+                    "p10_lead_time_to_critical_minutes"
+                ),
+                "missed_critical_count": event.get("missed_critical_count", 0),
                 "false_alarms_per_day": event.get("false_alarms_per_day", 0.0),
                 "detection_delay_minutes": event.get(
                     "median_detection_delay_minutes"
@@ -87,6 +95,11 @@ def operating_point_rows(comparison: dict[str, Any]) -> list[dict[str, Any]]:
                     "critical_region_recall": event.get(
                         "critical_region_recall", 0.0
                     ),
+                    "detected_before_critical_rate": event.get(
+                        "detected_before_critical_rate", 0.0
+                    ),
+                    "late_detection_rate": event.get("late_detection_rate", 0.0),
+                    "missed_critical_count": event.get("missed_critical_count", 0),
                     "event_f1": event.get("f1", 0.0),
                     "false_alarms_per_day": event.get(
                         "false_alarms_per_day", 0.0

@@ -19,11 +19,21 @@ METRIC_PATHS: dict[str, tuple[str, str]] = {
     "event_recall": ("event_metrics", "recall"),
     "event_f1": ("event_metrics", "f1"),
     "critical_region_recall": ("event_metrics", "critical_region_recall"),
+    "detected_before_critical_rate": (
+        "event_metrics",
+        "detected_before_critical_rate",
+    ),
+    "late_detection_rate": ("event_metrics", "late_detection_rate"),
+    "missed_critical_count": ("event_metrics", "missed_critical_count"),
     "false_alarms_per_day": ("event_metrics", "false_alarms_per_day"),
     "detection_delay": ("event_metrics", "median_detection_delay_minutes"),
     "lead_time_to_critical": (
         "event_metrics",
         "median_lead_time_to_critical_minutes",
+    ),
+    "p10_lead_time_to_critical": (
+        "event_metrics",
+        "p10_lead_time_to_critical_minutes",
     ),
     "early_warning_time": ("event_metrics", "mean_early_warning_time_minutes"),
     "channel_hit_at_1": ("xai_metrics", "channel_hit_at_1"),

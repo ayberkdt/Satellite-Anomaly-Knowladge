@@ -47,6 +47,16 @@ def experiment_model_rows(comparison: dict[str, Any]) -> list[dict[str, str | fl
                 "model": model_label(model_key),
                 "event_precision": _metric(model_payload, "event_metrics", "precision"),
                 "event_recall": _metric(model_payload, "event_metrics", "recall"),
+                "critical_region_recall": _metric(
+                    model_payload,
+                    "event_metrics",
+                    "critical_region_recall",
+                ),
+                "detected_before_critical_rate": _metric(
+                    model_payload,
+                    "event_metrics",
+                    "detected_before_critical_rate",
+                ),
                 "event_f1": _metric(model_payload, "event_metrics", "f1"),
                 "false_alarms_per_day": _metric(
                     model_payload,
@@ -57,6 +67,11 @@ def experiment_model_rows(comparison: dict[str, Any]) -> list[dict[str, str | fl
                     model_payload,
                     "event_metrics",
                     "median_detection_delay_minutes",
+                ),
+                "median_lead_time_to_critical_min": _metric(
+                    model_payload,
+                    "event_metrics",
+                    "median_lead_time_to_critical_minutes",
                 ),
                 "point_f1": _metric(model_payload, "point_metrics", "f1"),
                 "channel_hit_at_3": _metric(
@@ -95,6 +110,12 @@ def threshold_sweep_rows(comparison: dict[str, Any]) -> list[dict[str, str | flo
                     "event_precision": float(entry["event_precision"]),
                     "event_recall": float(entry["event_recall"]),
                     "event_f1": float(entry["event_f1"]),
+                    "critical_region_recall": float(
+                        entry.get("critical_region_recall", 0.0)
+                    ),
+                    "detected_before_critical_rate": float(
+                        entry.get("detected_before_critical_rate", 0.0)
+                    ),
                     "false_alarms_per_day": float(entry["false_alarms_per_day"]),
                     "median_delay_min": float(
                         entry["median_detection_delay_minutes"] or 0.0
@@ -118,6 +139,15 @@ def delay_rows(comparison: dict[str, Any]) -> list[dict[str, str | float]]:
                     "true_event_id": str(match["true_event_id"]),
                     "predicted_event_id": str(match["predicted_event_id"]),
                     "detection_delay_min": float(match["detection_delay_minutes"]),
+                    "lead_time_to_critical_min": float(
+                        match.get("lead_time_to_critical_region_minutes", 0.0)
+                    ),
+                    "before_critical": "yes"
+                    if match.get("detected_before_critical_region")
+                    else "no",
+                    "critical_covered": "yes"
+                    if match.get("critical_region_covered")
+                    else "no",
                 }
             )
     return rows
@@ -169,6 +199,9 @@ def event_diagnostic_rows(
                         "expected_subsystem": str(truth["expected_subsystem"]),
                         "predicted_event_id": "MISS",
                         "detection_delay_min": float("nan"),
+                        "lead_time_to_critical_min": float("nan"),
+                        "before_critical": "no",
+                        "critical_covered": "no",
                         "top_channels": "",
                         "top_subsystems": "",
                         "channel_hit": "no",
@@ -205,6 +238,15 @@ def event_diagnostic_rows(
                     "expected_subsystem": expected_subsystem,
                     "predicted_event_id": predicted_event_id,
                     "detection_delay_min": float(match["detection_delay_minutes"]),
+                    "lead_time_to_critical_min": float(
+                        match.get("lead_time_to_critical_region_minutes", 0.0)
+                    ),
+                    "before_critical": "yes"
+                    if match.get("detected_before_critical_region")
+                    else "no",
+                    "critical_covered": "yes"
+                    if match.get("critical_region_covered")
+                    else "no",
                     "top_channels": ", ".join(top_channels),
                     "top_subsystems": ", ".join(dict.fromkeys(top_subsystems)),
                     "channel_hit": "yes"
@@ -228,6 +270,25 @@ def false_positive_rows(
     for model_key, model_payload in comparison.items():
         if model_key == "dataset":
             continue
+        diagnostics_path = artifact_dir / model_key / "false_positive_diagnostics.csv"
+        if diagnostics_path.exists() and diagnostics_path.stat().st_size > 0:
+            with diagnostics_path.open(newline="", encoding="utf-8") as handle:
+                for row in csv.DictReader(handle):
+                    rows.append(
+                        {
+                            "model": model_label(model_key),
+                            "predicted_event_id": row.get("predicted_event_id", ""),
+                            "start": row.get("start", ""),
+                            "end": row.get("end", ""),
+                            "risk_level": row.get("risk_level", ""),
+                            "likely_reason": row.get("likely_reason", ""),
+                            "operational_mode": row.get("operational_mode", ""),
+                            "eclipse": row.get("eclipse", ""),
+                            "top_subsystems": row.get("top_subsystems", ""),
+                            "top_channels": row.get("top_channels", ""),
+                        }
+                    )
+            continue
         matched_ids = {
             str(match["predicted_event_id"])
             for match in model_payload.get("event_metrics", {}).get("matches", [])
@@ -249,8 +310,14 @@ def false_positive_rows(
                     "start": str(event["start"]),
                     "end": str(event["end"]),
                     "risk_level": str(event["risk_level"]),
+                    "likely_reason": "",
                     "operational_mode": str(
                         event.get("context", {}).get("operational_mode", "")
+                    ),
+                    "eclipse": str(event.get("context", {}).get("eclipse", "")),
+                    "top_subsystems": ", ".join(
+                        str(item.get("subsystem", ""))
+                        for item in event.get("top_channels", [])[:3]
                     ),
                     "top_channels": ", ".join(
                         str(item["channel"]) for item in event.get("top_channels", [])[:3]

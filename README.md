@@ -322,6 +322,31 @@ ESA-ADB adapters currently fail explicitly until source-specific schema
 mapping is implemented. Real performance claims require evaluation through
 one of these or another mission dataset. GNN/GAT remains deferred.
 
+## SAK-v2.5 Dashboard & Critical Early-Warning Metrics
+
+SAK-v2.5 tightens early-warning metrics so `critical_region_recall` is no
+longer a synonym for event recall. Event recall means an injected event was
+matched at all. Critical-region recall means the alarm arrived before the
+critical region or overlapped it while it was active. The dashboard also
+reports `detected_before_critical_rate`, `late_detection_rate`,
+`missed_critical_count`, median lead time and p10 lead time.
+
+Operating-point selection still uses calibration only. Its constraints now
+include event recall, critical-region recall, before-critical rate and maximum
+false alarms/day. Test metrics remain final reporting only.
+
+The static dashboard defaults to the current selected global operating points:
+`pca_global`, `dense_autoencoder_global` and `tcn_autoencoder_global`.
+Mode-aware, fixed-quantile, sweep and older diagnostic details remain
+available under the Advanced / Legacy section instead of crowding the default
+view.
+
+Subsystem colors are fixed across cards, badges, plots and tables: EPS amber,
+THERMAL red, AOCS blue, COMM purple, PAYLOAD green and UNKNOWN gray. The NASA
+SMAP/MSL adapter now supports inspect/validate workflows and can load a
+normalized `telemetry.csv` or `telemetry.parquet` staging folder; raw
+Telemanom arrays still require sequence/channel mapping before full loading.
+
 ## Temporal Windowing
 
 `sak.features.windowing.build_windows` prepares data for temporal models:
@@ -368,3 +393,5 @@ and false-alarm suppression are documented in
 [Experiment 003](docs/experiment-003-temporal-calibration.md). The anomalous
 calibration split and data-realism design are documented in
 [Experiment 004](docs/experiment-004-anomalous-calibration-and-data-realism.md).
+Critical early-warning metrics and the dashboard cleanup are documented in
+[Experiment 005](docs/experiment-005-critical-metrics-and-dashboard.md).

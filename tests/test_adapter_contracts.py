@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from sak.data import (
+    AdapterDataNotFoundError,
     EsaAdbAdapter,
     NasaSmapMslAdapter,
     SyntheticTelemetryAdapter,
@@ -30,7 +31,11 @@ def test_synthetic_adapter_returns_canonical_dataset(tmp_path: Path) -> None:
     assert loaded.events
 
 
-@pytest.mark.parametrize("adapter", [NasaSmapMslAdapter(), EsaAdbAdapter()])
-def test_open_dataset_skeletons_fail_explicitly(adapter: object) -> None:
+def test_esa_dataset_skeleton_fails_explicitly() -> None:
     with pytest.raises(NotImplementedError):
-        adapter.load(Path("unused"))
+        EsaAdbAdapter().load(Path("unused"))
+
+
+def test_nasa_adapter_reports_missing_data_explicitly() -> None:
+    with pytest.raises(AdapterDataNotFoundError):
+        NasaSmapMslAdapter().load(Path("unused"))

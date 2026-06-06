@@ -19,6 +19,10 @@ class IntervalEvent(Protocol):
     end: pd.Timestamp
 
 
+def _timestamp_attr(event: IntervalEvent, name: str, default: pd.Timestamp) -> pd.Timestamp:
+    return pd.Timestamp(getattr(event, name, default))
+
+
 def point_metrics(labels: np.ndarray, predictions: np.ndarray) -> dict[str, float | int]:
     """Calculate binary point-level precision, recall and F1."""
 
@@ -56,10 +60,17 @@ def event_metrics(
 
     for true_event in sorted(true_events, key=lambda event: event.start):
         candidates: list[tuple[pd.Timedelta, int]] = []
-        early_warning_start = pd.Timestamp(
-            getattr(true_event, "early_warning_region_start", true_event.start)
+        early_warning_start = _timestamp_attr(
+            true_event,
+            "early_warning_region_start",
+            pd.Timestamp(true_event.start),
         )
-        expanded_start = early_warning_start - tolerance
+        critical_start = _timestamp_attr(
+            true_event,
+            "failure_region_start",
+            pd.Timestamp(true_event.start),
+        )
+        expanded_start = early_warning_start
         expanded_end = true_event.end + tolerance
         for prediction_index in unmatched_predictions:
             prediction = predicted_events[prediction_index]
@@ -76,9 +87,6 @@ def event_metrics(
         _, prediction_index = min(candidates, key=lambda item: item[0])
         prediction = predicted_events[prediction_index]
         unmatched_predictions.remove(prediction_index)
-        critical_start = pd.Timestamp(
-            getattr(true_event, "failure_region_start", true_event.start)
-        )
         anomaly_delay = (
             prediction.start_time - true_event.start
         ).total_seconds() / 60.0
@@ -90,6 +98,11 @@ def event_metrics(
             prediction.start_time >= early_warning_start
             and prediction.start_time < true_event.start
         )
+        critical_region_covered = (
+            prediction.start_time <= true_event.end
+            and prediction.end_time >= critical_start
+        )
+        late_detection = prediction.start_time > critical_start
         matches.append(
             {
                 "true_event_id": true_event.event_id,
@@ -99,6 +112,8 @@ def event_metrics(
                 "lead_time_to_critical_region_minutes": lead_time,
                 "detected_before_critical_region": detected_before_critical,
                 "detected_in_precursor_region": detected_in_precursor,
+                "critical_region_covered": critical_region_covered,
+                "late_detection": late_detection,
             }
         )
 
@@ -115,10 +130,17 @@ def event_metrics(
     detected_before_critical = sum(
         bool(item["detected_before_critical_region"]) for item in matches
     )
+    critical_region_hits = sum(
+        bool(item["detected_before_critical_region"])
+        or bool(item["critical_region_covered"])
+        for item in matches
+    )
     precursor_detections = sum(
         bool(item["detected_in_precursor_region"]) for item in matches
     )
+    late_detections = sum(bool(item["late_detection"]) for item in matches)
     false_alarm_count = predicted_count - match_count
+    missed_critical_count = true_count - critical_region_hits
 
     false_alarms_per_day: float | None = None
     if observation_duration is not None and observation_duration.total_seconds() > 0:
@@ -138,13 +160,20 @@ def event_metrics(
         "median_lead_time_to_critical_minutes": (
             float(np.median(lead_times)) if lead_times else None
         ),
-        "critical_region_recall": match_count / true_count if true_count else 0.0,
+        "p10_lead_time_to_critical_minutes": (
+            float(np.percentile(lead_times, 10.0)) if lead_times else None
+        ),
+        "critical_region_recall": (
+            critical_region_hits / true_count if true_count else 0.0
+        ),
         "detected_before_critical_rate": (
             detected_before_critical / true_count if true_count else 0.0
         ),
         "precursor_detection_rate": (
             precursor_detections / true_count if true_count else 0.0
         ),
+        "missed_critical_count": missed_critical_count,
+        "late_detection_rate": late_detections / true_count if true_count else 0.0,
         "p90_detection_delay_minutes": float(np.percentile(delays, 90.0))
         if delays
         else None,

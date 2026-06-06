@@ -40,6 +40,7 @@ class AlarmSelection:
     selection_reason: str
     minimum_event_recall: float
     minimum_critical_recall: float
+    minimum_before_critical_rate: float
     maximum_false_alarms_per_day: float
     calibration_true_events: int
     sweep_rows: list[dict[str, Any]]
@@ -58,6 +59,7 @@ class AlarmSelection:
             "selection_reason": self.selection_reason,
             "minimum_event_recall": self.minimum_event_recall,
             "minimum_critical_recall": self.minimum_critical_recall,
+            "minimum_before_critical_rate": self.minimum_before_critical_rate,
             "maximum_false_alarms_per_day": self.maximum_false_alarms_per_day,
             "selection_partition": "calibration",
             "validation_partition_used_for_selection": False,
@@ -215,6 +217,9 @@ def select_alarm_configuration(
     minimum_critical_recall = float(
         operating_settings.get("minimum_critical_recall", 0.90)
     )
+    minimum_before_critical_rate = float(
+        operating_settings.get("minimum_before_critical_rate", 0.0)
+    )
     maximum_false_alarms = float(
         operating_settings.get(
             "maximum_false_alarms_per_day",
@@ -268,6 +273,9 @@ def select_alarm_configuration(
                     "critical_region_recall": event_result[
                         "critical_region_recall"
                     ],
+                    "detected_before_critical_rate": event_result[
+                        "detected_before_critical_rate"
+                    ],
                     "median_lead_time_to_critical_minutes": event_result[
                         "median_lead_time_to_critical_minutes"
                     ],
@@ -306,6 +314,8 @@ def select_alarm_configuration(
             and float(selected["event_recall"]) >= minimum_recall
             and float(selected["critical_region_recall"])
             >= minimum_critical_recall
+            and float(selected["detected_before_critical_rate"])
+            >= minimum_before_critical_rate
             and float(selected["false_alarms_per_day"]) <= maximum_false_alarms
         )
         selection_reason = (
@@ -318,6 +328,7 @@ def select_alarm_configuration(
             candidates,
             minimum_event_recall=minimum_recall,
             minimum_critical_recall=minimum_critical_recall,
+            minimum_before_critical_rate=minimum_before_critical_rate,
             maximum_false_alarms_per_day=maximum_false_alarms,
         )
         selected = selection_result.candidate
@@ -337,6 +348,7 @@ def select_alarm_configuration(
         selection_reason=selection_reason,
         minimum_event_recall=minimum_recall,
         minimum_critical_recall=minimum_critical_recall,
+        minimum_before_critical_rate=minimum_before_critical_rate,
         maximum_false_alarms_per_day=maximum_false_alarms,
         calibration_true_events=len(true_events),
         sweep_rows=marked_rows,
